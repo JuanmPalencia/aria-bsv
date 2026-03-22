@@ -91,6 +91,14 @@ class StorageInterface(ABC):
     def list_records_by_epoch(self, epoch_id: str) -> list[AuditRecord]:
         """Return all AuditRecords belonging to *epoch_id*, ordered by sequence."""
 
+    def list_epochs(
+        self,
+        system_id: str | None = None,
+        limit: int = 100,
+    ) -> list["EpochRow"]:
+        """Return epochs ordered by opened_at descending.  Default: no-op (returns [])."""
+        return []
+
     # ------------------------------------------------------------------
     # ZK extension methods — optional (default: no-op / return None)
     # ------------------------------------------------------------------

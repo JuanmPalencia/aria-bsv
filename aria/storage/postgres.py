@@ -1,15 +1,35 @@
-"""SQLiteStorage — zero-config local storage backend using SQLAlchemy."""
+"""
+aria.storage.postgres — PostgreSQL storage backend for ARIA.
+
+Designed for production deployments where SQLite's single-writer limitation
+is a bottleneck.  Uses SQLAlchemy's QueuePool for connection pooling and
+relies on PostgreSQL's row-level locking (not a Python threading.Lock) for
+safe concurrent writes.
+
+Usage::
+
+    from aria.storage.postgres import PostgreSQLStorage
+
+    storage = PostgreSQLStorage(
+        dsn="postgresql+psycopg2://user:pass@localhost:5432/aria",
+        pool_size=10,
+        max_overflow=20,
+    )
+
+Migration::
+
+    # Apply schema migrations with Alembic:
+    ARIA_DB_URL=postgresql+psycopg2://... alembic upgrade head
+"""
 
 from __future__ import annotations
 
 import json
-import threading
 import time
 from typing import Any
 
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine, select, update
 from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 from ..core.errors import ARIAStorageError
 from ..core.record import AuditRecord
@@ -24,39 +44,58 @@ from ._schema import (
 )
 
 
-class SQLiteStorage(StorageInterface):
-    """Thread-safe SQLite storage backend.
-
-    Uses a single SQLAlchemy engine with ``check_same_thread=False`` and a
-    per-call ``Session`` so that both the main thread (receipts) and the
-    background BatchManager thread (writes) can use it concurrently.
+class PostgreSQLStorage(StorageInterface):
+    """PostgreSQL-backed ARIA storage.
 
     Args:
-        dsn: SQLAlchemy DSN.  Examples:
-             ``"sqlite:///aria.db"``  — file-based  (relative path)
-             ``"sqlite:////abs/path/aria.db"``  — absolute path
-             ``"sqlite://"``         — in-memory (for tests)
+        dsn:           SQLAlchemy DSN.  Must start with ``postgresql`` or
+                       ``postgres``.  Example::
+
+                           postgresql+psycopg2://user:pass@host:5432/aria_db
+                           postgresql+asyncpg://...   (sync interface only)
+
+        pool_size:     Number of persistent connections in the pool (default 5).
+        max_overflow:  Extra connections allowed above ``pool_size`` (default 10).
+        pool_recycle:  Seconds before a connection is recycled (default 3600).
+        _engine:       *Testing only* — supply a pre-built SQLAlchemy engine to
+                       bypass DSN validation and pool configuration.  This allows
+                       unit tests to substitute a SQLite engine without a live
+                       PostgreSQL server.
     """
 
-    def __init__(self, dsn: str = "sqlite:///aria.db") -> None:
-        connect_args: dict[str, Any] = {}
-        kwargs: dict[str, Any] = {}
-        if dsn.startswith("sqlite"):
-            connect_args["check_same_thread"] = False
-            # In-memory SQLite must share a single connection across threads.
-            if dsn in ("sqlite://", "sqlite:///:memory:"):
-                kwargs["poolclass"] = StaticPool
-
-        self._engine = create_engine(dsn, connect_args=connect_args, **kwargs)
+    def __init__(
+        self,
+        dsn: str | None = None,
+        *,
+        pool_size: int = 5,
+        max_overflow: int = 10,
+        pool_recycle: int = 3600,
+        _engine: Engine | None = None,
+    ) -> None:
+        if _engine is not None:
+            self._engine = _engine
+        else:
+            if dsn is None:
+                raise ValueError("dsn is required when _engine is not provided")
+            if not (dsn.startswith("postgresql") or dsn.startswith("postgres")):
+                raise ValueError(
+                    f"PostgreSQLStorage requires a postgresql:// DSN, got: {dsn!r}"
+                )
+            self._engine = create_engine(
+                dsn,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_recycle=pool_recycle,
+                pool_pre_ping=True,
+            )
         _Base.metadata.create_all(self._engine)
-        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # StorageInterface implementation
     # ------------------------------------------------------------------
 
     def save_record(self, record: AuditRecord) -> None:
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine, expire_on_commit=False) as session:
             try:
                 row = _RecordTable(
                     record_id=record.record_id,
@@ -87,7 +126,7 @@ class SQLiteStorage(StorageInterface):
         state_hash: str,
         opened_at: int,
     ) -> None:
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine, expire_on_commit=False) as session:
             try:
                 row = _EpochTable(
                     epoch_id=epoch_id,
@@ -115,7 +154,7 @@ class SQLiteStorage(StorageInterface):
         records_count: int,
         closed_at: int,
     ) -> None:
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine, expire_on_commit=False) as session:
             try:
                 row = session.get(_EpochTable, epoch_id)
                 if row is None:
@@ -132,14 +171,14 @@ class SQLiteStorage(StorageInterface):
                 raise ARIAStorageError(f"save_epoch_close failed: {exc}") from exc
 
     def get_record(self, record_id: str) -> AuditRecord | None:
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             row = session.get(_RecordTable, record_id)
             if row is None:
                 return None
             return _row_to_audit_record(row)
 
     def get_epoch(self, epoch_id: str) -> EpochRow | None:
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             row = session.get(_EpochTable, epoch_id)
             if row is None:
                 return None
@@ -161,8 +200,7 @@ class SQLiteStorage(StorageInterface):
         system_id: str | None = None,
         limit: int = 100,
     ) -> list[EpochRow]:
-        """Return epochs ordered by opened_at descending."""
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             q = session.query(_EpochTable)
             if system_id is not None:
                 q = q.filter(_EpochTable.system_id == system_id)
@@ -184,7 +222,7 @@ class SQLiteStorage(StorageInterface):
             ]
 
     def list_records_by_epoch(self, epoch_id: str) -> list[AuditRecord]:
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             rows = (
                 session.query(_RecordTable)
                 .filter(_RecordTable.epoch_id == epoch_id)
@@ -198,8 +236,7 @@ class SQLiteStorage(StorageInterface):
     # ------------------------------------------------------------------
 
     def save_proof(self, proof: "Any") -> None:
-        """Persist a ZKProof to the aria_zk_proofs table."""
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine, expire_on_commit=False) as session:
             try:
                 row = _ZKProofTable(
                     record_id=proof.record_id or proof.epoch_id,
@@ -219,9 +256,8 @@ class SQLiteStorage(StorageInterface):
                 raise ARIAStorageError(f"save_proof failed: {exc}") from exc
 
     def get_proof(self, record_id: str) -> "Any":
-        """Return the ZKProof for *record_id*, or None if not stored."""
         from ..zk.base import ZKProof
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             row = session.get(_ZKProofTable, record_id)
             if row is None:
                 return None
@@ -237,9 +273,8 @@ class SQLiteStorage(StorageInterface):
             )
 
     def list_proofs_by_epoch(self, epoch_id: str) -> "list[Any]":
-        """Return all ZKProofs for *epoch_id*."""
         from ..zk.base import ZKProof
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             rows = (
                 session.query(_ZKProofTable)
                 .filter(_ZKProofTable.epoch_id == epoch_id)
@@ -260,8 +295,7 @@ class SQLiteStorage(StorageInterface):
             ]
 
     def save_vk(self, vk: "Any") -> None:
-        """Persist a VerifyingKey indexed by model_hash."""
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine, expire_on_commit=False) as session:
             try:
                 row = _VKTable(
                     model_hash=vk.model_hash,
@@ -276,9 +310,8 @@ class SQLiteStorage(StorageInterface):
                 raise ARIAStorageError(f"save_vk failed: {exc}") from exc
 
     def get_vk(self, model_hash: str) -> "Any":
-        """Return the VerifyingKey for *model_hash*, or None."""
         from ..zk.base import VerifyingKey
-        with self._lock, Session(self._engine) as session:
+        with Session(self._engine) as session:
             row = session.get(_VKTable, model_hash)
             if row is None:
                 return None
