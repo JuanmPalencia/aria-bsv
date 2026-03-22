@@ -42,7 +42,7 @@ def main() -> None:
     config = AuditConfig(
         system_id=system_id,
         bsv_key=bsv_key or "placeholder",  # replaced by mock in dry-run
-        network="testnet",
+        network="mainnet",
         batch_ms=10_000,   # close epoch every 10 seconds
         batch_size=100,    # or after 100 records
     )

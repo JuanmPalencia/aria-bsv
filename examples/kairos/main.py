@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
             system_id="kairos-v2",
             bsv_key=os.environ.get("ARIA_BSV_KEY", "placeholder"),
             arc_api_key=os.environ.get("ARIA_ARC_API_KEY"),
-            network="testnet",
+            network="mainnet",
             batch_ms=1_500,          # KAIROS closes epoch every 1.5 seconds
             batch_size=500,
             pii_fields=["caller_phone", "caller_name", "patient_name"],
