@@ -35,6 +35,9 @@ htmlcov/
 *.swp
 *.swo
 
+# Claude Code — local session data, never push
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
