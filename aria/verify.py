@@ -18,8 +18,10 @@ from .storage.base import StorageInterface
 
 _log = logging.getLogger(__name__)
 
-# OP_RETURN prefix produced by DirectWallet: OP_FALSE OP_RETURN PUSH4 b'ARIA'
-_ARIA_SCRIPT_PREFIX = bytes([0x00, 0x6A, 0x04, 0x41, 0x52, 0x49, 0x41])
+# OP_RETURN prefix: PUSH4 b'ARIA' — after stripping optional leading OP_FALSE (0x00).
+# bsvlib produces: 00 6A 04 ARIA ...  (OP_FALSE OP_RETURN)
+# WhatsOnChain API returns the same script with the leading 00 stripped: 6A 04 ARIA ...
+_ARIA_SCRIPT_PREFIX = bytes([0x6A, 0x04, 0x41, 0x52, 0x49, 0x41])
 
 _WOC_URLS = {
     "mainnet": "https://api.whatsonchain.com/v1/bsv/main",
@@ -145,6 +147,10 @@ def _parse_aria_script(script_hex: str) -> dict[str, Any] | None:
         raw = bytes.fromhex(script_hex)
     except ValueError:
         return None
+
+    # Strip optional leading OP_FALSE (0x00) — bsvlib includes it, WoC API omits it.
+    if raw and raw[0] == 0x00:
+        raw = raw[1:]
 
     if not raw.startswith(_ARIA_SCRIPT_PREFIX):
         return None

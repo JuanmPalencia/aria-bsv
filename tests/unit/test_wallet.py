@@ -159,6 +159,41 @@ class TestDirectWalletSignAndBroadcast:
         # The WIF string used to construct the wallet must not appear in the error.
         assert _TESTNET_WIF not in str(exc_info.value)
 
+    @pytest.mark.asyncio
+    async def test_spent_utxo_tracked_after_broadcast(self):
+        """After a broadcast, the chosen UTXO key is in _spent_utxos."""
+        wallet = self._make_wallet()
+        utxo_a = {"txid": "a" * 64, "vout": 0, "satoshi": 10_000, "private_keys": [wallet._key]}
+
+        with patch.object(wallet, "_get_utxos", return_value=[utxo_a]):
+            await wallet.sign_and_broadcast({"type": "EPOCH_OPEN", "epoch_id": "ep_1"})
+
+        assert f"{'a' * 64}:0" in wallet._spent_utxos
+
+    @pytest.mark.asyncio
+    async def test_second_broadcast_skips_spent_utxo(self):
+        """EPOCH_CLOSE uses utxo_b when utxo_a was already spent by EPOCH_OPEN."""
+        wallet = self._make_wallet()
+        utxo_a = {"txid": "a" * 64, "vout": 0, "satoshi": 10_000, "private_keys": [wallet._key]}
+        utxo_b = {"txid": "b" * 64, "vout": 1, "satoshi": 9_800, "private_keys": [wallet._key]}
+
+        call_count = 0
+
+        def _utxos_side_effect():
+            nonlocal call_count
+            call_count += 1
+            # Simulate WhatsOnChain: utxo_a still appears as "unspent" (unconfirmed)
+            return [utxo_a, utxo_b]
+
+        with patch.object(wallet, "_get_utxos", side_effect=_utxos_side_effect):
+            # First broadcast: selects utxo_a
+            await wallet.sign_and_broadcast({"type": "EPOCH_OPEN"})
+            assert f"{'a' * 64}:0" in wallet._spent_utxos
+
+            # Second broadcast: utxo_a is filtered; selects utxo_b
+            await wallet.sign_and_broadcast({"type": "EPOCH_CLOSE"})
+            assert f"{'b' * 64}:1" in wallet._spent_utxos
+
 
 # ---------------------------------------------------------------------------
 # BRC100Wallet — sign_and_broadcast (mocked HTTP)

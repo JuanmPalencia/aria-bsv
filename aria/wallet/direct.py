@@ -52,6 +52,7 @@ class DirectWallet(WalletInterface):
 
         self._broadcaster = broadcaster
         self._network = network
+        self._spent_utxos: set[str] = set()
 
     async def sign_and_broadcast(self, payload: dict) -> str:  # type: ignore[type-arg]
         """Serialise *payload* to canonical JSON, embed in OP_RETURN, sign, broadcast.
@@ -79,14 +80,22 @@ class DirectWallet(WalletInterface):
 
     async def _build_signed_tx(self, data: bytes) -> str:
         """Build a raw signed BSV transaction with an OP_RETURN embedding *data*."""
-        utxos = await asyncio.to_thread(self._get_utxos)
+        all_utxos = await asyncio.to_thread(self._get_utxos)
+        utxos = [
+            u for u in all_utxos
+            if f"{u['txid']}:{u['vout']}" not in self._spent_utxos
+        ]
         if not utxos:
             raise ARIAWalletError("invalid key material")
 
         from bsvlib.transaction.transaction import Transaction, TxOutput  # type: ignore[import]
         from bsvlib.transaction.unspent import Unspent  # type: ignore[import]
 
-        unspent = Unspent(**utxos[0])
+        chosen = utxos[0]
+        utxo_key = f"{chosen['txid']}:{chosen['vout']}"
+        self._spent_utxos.add(utxo_key)
+
+        unspent = Unspent(**chosen)
         tx = Transaction(chain=self._chain)
         tx.add_input(unspent)
 
