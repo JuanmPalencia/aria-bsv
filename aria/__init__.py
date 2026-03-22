@@ -3,6 +3,7 @@ aria — Auditable Real-time Inference Architecture (BRC-120 reference implement
 
 Phase 0 exports: core cryptographic primitives.
 Phase 1 exports: EpochManager, wallet and broadcaster interfaces.
+Phase 2 exports: InferenceAuditor, AuditConfig, storage.
 """
 
 from aria.core import (
@@ -31,6 +32,8 @@ from aria.core import (
 )
 from aria.broadcaster import ARCBroadcaster, BroadcasterInterface, TxStatus
 from aria.wallet import BRC100Wallet, DirectWallet, WalletInterface
+from aria.auditor import AuditConfig, InferenceAuditor, Receipt
+from aria.storage import EpochRow, SQLiteStorage, StorageInterface
 
 __version__ = "0.1.0"
 
@@ -67,4 +70,12 @@ __all__ = [
     "BRC100Wallet",
     "DirectWallet",
     "WalletInterface",
+    # auditor (Phase 2)
+    "AuditConfig",
+    "InferenceAuditor",
+    "Receipt",
+    # storage
+    "EpochRow",
+    "SQLiteStorage",
+    "StorageInterface",
 ]
