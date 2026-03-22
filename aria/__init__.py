@@ -34,6 +34,7 @@ from aria.broadcaster import ARCBroadcaster, BroadcasterInterface, TxStatus
 from aria.wallet import BRC100Wallet, DirectWallet, WalletInterface
 from aria.auditor import AuditConfig, InferenceAuditor, Receipt
 from aria.storage import EpochRow, SQLiteStorage, StorageInterface
+from aria.verify import TxFetcher, VerificationResult, Verifier, WhatsOnChainFetcher
 
 __version__ = "0.1.0"
 
@@ -78,4 +79,9 @@ __all__ = [
     "EpochRow",
     "SQLiteStorage",
     "StorageInterface",
+    # verify (Phase 3)
+    "TxFetcher",
+    "VerificationResult",
+    "Verifier",
+    "WhatsOnChainFetcher",
 ]
