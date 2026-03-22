@@ -1,0 +1,58 @@
+name: Security
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+jobs:
+  bandit:
+    name: SAST — Bandit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install bandit
+        run: pip install bandit>=1.7
+      - name: Run Bandit (medium severity+)
+        run: |
+          bandit -r aria/ registry/ portal/ \
+                 -ll \
+                 --exclude "*/tests/*" \
+                 -f json -o bandit-report.json || true
+          bandit -r aria/ registry/ portal/ -ll --exclude "*/tests/*"
+
+  pip-audit:
+    name: Dependency audit — pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project
+        run: pip install -e ".[dev]"
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit>=2.7
+          pip-audit --strict
+
+  key-leak-scan:
+    name: Key material leak scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install and run key logging tests
+        run: |
+          pip install -e ".[dev]"
+          pytest tests/chaos/test_key_logging.py -v
