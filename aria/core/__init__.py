@@ -1,5 +1,6 @@
-"""aria.core — cryptographic primitives for ARIA (BRC-120)."""
+"""aria.core — cryptographic primitives and protocol logic for ARIA (BRC-120)."""
 
+from aria.core.epoch import EpochConfig, EpochManager, EpochOpenResult, EpochCloseResult
 from aria.core.errors import (
     ARIABroadcastError,
     ARIAConfigError,
@@ -15,6 +16,11 @@ from aria.core.merkle import ARIAMerkleTree, MerkleProof, verify_proof
 from aria.core.record import ARIA_VERSION, AuditRecord
 
 __all__ = [
+    # epoch
+    "EpochConfig",
+    "EpochManager",
+    "EpochOpenResult",
+    "EpochCloseResult",
     # errors
     "ARIAError",
     "ARIAConfigError",
