@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARIA Verification Portal</title>
+  <style>
+    :root {
+      --bg:       #0f172a;
+      --surface:  #1e293b;
+      --border:   #334155;
+      --accent:   #06b6d4;
+      --accent2:  #0891b2;
+      --text:     #f1f5f9;
+      --muted:    #94a3b8;
+      --success:  #22c55e;
+      --danger:   #ef4444;
+      --warn:     #f59e0b;
+      --radius:   10px;
+      --mono:     "JetBrains Mono", "Fira Code", "Consolas", monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 1rem; color: #fff; flex-shrink: 0;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+    header span { color: var(--muted); font-size: 0.875rem; margin-left: auto; }
+
+    /* ── Main ────────────────────────────────────────────── */
+    main { flex: 1; max-width: 860px; width: 100%; margin: 0 auto; padding: 2.5rem 1.5rem; }
+
+    /* ── Search card ─────────────────────────────────────── */
+    .search-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .search-card h2 {
+      font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;
+    }
+    .search-card p {
+      color: var(--muted); font-size: 0.875rem; margin-bottom: 1.5rem; line-height: 1.6;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem; }
+    label { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-bottom: 0.25rem; display: block; }
+    input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.65rem 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: var(--muted); opacity: 0.6; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.65rem 1.5rem;
+      border-radius: 6px; border: none; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border);
+      font-size: 0.8rem; padding: 0.5rem 1rem;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Spinner ─────────────────────────────────────────── */
+    #spinner {
+      display: none; align-items: center; gap: 0.75rem;
+      color: var(--muted); font-size: 0.875rem; margin-top: 1rem;
+    }
+    #spinner.active { display: flex; }
+    .spin {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result card ─────────────────────────────────────── */
+    #result { display: none; }
+    #result.active { display: block; }
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .result-header {
+      padding: 1.5rem 2rem;
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+    }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 99px; font-size: 0.8rem; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .badge-valid   { background: rgba(34,197,94,.15);  color: var(--success); }
+    .badge-tampered{ background: rgba(239,68,68,.15);  color: var(--danger);  }
+    .badge-error   { background: rgba(245,158,11,.15); color: var(--warn);    }
+    .result-headline { font-size: 1rem; font-weight: 600; margin-top: 0.5rem; }
+    .result-subline  { color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem; line-height: 1.5; }
+    .action-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    /* ── Detail grid ─────────────────────────────────────── */
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1px;
+      background: var(--border);
+    }
+    .detail-cell {
+      background: var(--surface);
+      padding: 1rem 1.5rem;
+    }
+    .detail-cell .key {
+      font-size: 0.7rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 0.3rem;
+    }
+    .detail-cell .val {
+      font-size: 0.85rem; font-family: var(--mono);
+      word-break: break-all; color: var(--text);
+    }
+    .detail-cell .val.na { color: var(--muted); font-family: inherit; font-style: italic; }
+
+    /* ── EU AI Act section ───────────────────────────────── */
+    .info-box {
+      padding: 1.25rem 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem; color: var(--muted); line-height: 1.7;
+    }
+    .info-box strong { color: var(--text); }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    footer {
+      text-align: center; padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 0.75rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── Print styles ────────────────────────────────────── */
+    @media print {
+      body { background: #fff; color: #000; }
+      header, footer, .search-card, .action-row, #spinner { display: none !important; }
+      .result-card { border: 1px solid #ccc; }
+      .result-header { background: #f9f9f9; }
+      .detail-cell { background: #fff; }
+    }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 600px) {
+      main { padding: 1.5rem 1rem; }
+      .search-card { padding: 1.25rem; }
+      .result-header { flex-direction: column; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">A</div>
+  <h1>ARIA Verification Portal</h1>
+  <span>BRC-120 · BSV</span>
+</header>
+
+<main>
+  <div class="search-card">
+    <h2>Verify an AI audit epoch</h2>
+    <p>
+      Enter the BSV transaction ID of an ARIA <strong>EPOCH_OPEN</strong> to verify
+      the cryptographic integrity of the audited AI system's decision record.
+    </p>
+    <form id="verify-form">
+      <div class="field-group">
+        <div>
+          <label for="open-txid">EPOCH_OPEN Transaction ID *</label>
+          <input type="text" id="open-txid" name="open_txid"
+                 placeholder="64-character hex transaction ID" maxlength="64" required />
+        </div>
+        <div>
+          <label for="close-txid">EPOCH_CLOSE Transaction ID (optional)</label>
+          <input type="text" id="close-txid" name="close_txid"
+                 placeholder="Required if not resolvable from local storage" maxlength="64" />
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit" id="verify-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        Verify
+      </button>
+    </form>
+    <div id="spinner">
+      <div class="spin"></div>
+      Querying BSV blockchain…
+    </div>
+  </div>
+
+  <div id="result">
+    <div class="result-card" id="result-card">
+      <div class="result-header">
+        <div>
+          <div id="status-badge" class="status-badge"></div>
+          <div id="result-headline" class="result-headline"></div>
+          <div id="result-subline" class="result-subline"></div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-ghost" onclick="downloadJson()">↓ JSON</button>
+          <button class="btn btn-ghost" onclick="window.print()">⎙ PDF</button>
+        </div>
+      </div>
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="info-box" id="info-box" style="display:none"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  ARIA · Auditable Real-time Inference Architecture ·
+  <a href="https://github.com/JuanmPalencia/aria-bsv" target="_blank" rel="noopener">BRC-120 Reference Implementation</a>
+</footer>
+
+<script>
+  let _lastResult = null;
+
+  document.getElementById('verify-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const openTxid  = document.getElementById('open-txid').value.trim();
+    const closeTxid = document.getElementById('close-txid').value.trim();
+    if (!openTxid) return;
+
+    setLoading(true);
+    hideResult();
+
+    try {
+      let url = `/verify/${encodeURIComponent(openTxid)}`;
+      if (closeTxid) url += `?close_txid=${encodeURIComponent(closeTxid)}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+      _lastResult = data;
+      renderResult(data);
+    } catch (err) {
+      renderError(err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  function setLoading(on) {
+    document.getElementById('spinner').classList.toggle('active', on);
+    document.getElementById('verify-btn').disabled = on;
+  }
+
+  function hideResult() {
+    document.getElementById('result').classList.remove('active');
+  }
+
+  function renderResult(d) {
+    const badge    = document.getElementById('status-badge');
+    const headline = document.getElementById('result-headline');
+    const subline  = document.getElementById('result-subline');
+
+    if (d.tampered) {
+      badge.className = 'status-badge badge-tampered';
+      badge.textContent = '✗ Tampered';
+      headline.textContent = 'Cryptographic inconsistency detected';
+      subline.textContent = d.error || 'The record has been altered since it was committed to BSV.';
+    } else if (d.valid) {
+      badge.className = 'status-badge badge-valid';
+      badge.textContent = '✓ Verified';
+      headline.textContent = 'Epoch integrity confirmed';
+      subline.textContent = `System ${d.system_id || '—'} · ${d.records_count} decision record${d.records_count !== 1 ? 's' : ''} committed on BSV.`;
+    } else {
+      badge.className = 'status-badge badge-error';
+      badge.textContent = '⚠ Unverifiable';
+      headline.textContent = 'Verification could not complete';
+      subline.textContent = d.error || 'Unknown error.';
+    }
+
+    const fields = [
+      { key: 'Epoch ID',       val: d.epoch_id     },
+      { key: 'System ID',      val: d.system_id    },
+      { key: 'Model ID',       val: d.model_id     },
+      { key: 'Model version',  val: d.model_version},
+      { key: 'Decision date',  val: d.decided_at ? new Date(d.decided_at).toLocaleString() : null },
+      { key: 'Records',        val: d.records_count != null ? String(d.records_count) : null },
+      { key: 'Merkle root',    val: d.merkle_root  },
+    ];
+
+    const grid = document.getElementById('detail-grid');
+    grid.innerHTML = fields.map(f => `
+      <div class="detail-cell">
+        <div class="key">${esc(f.key)}</div>
+        <div class="val${f.val ? '' : ' na'}">${f.val ? esc(f.val) : 'n/a'}</div>
+      </div>
+    `).join('');
+
+    const infoBox = document.getElementById('info-box');
+    if (d.valid) {
+      infoBox.style.display = '';
+      infoBox.innerHTML = `
+        <strong>What does this mean?</strong><br>
+        The EPOCH_OPEN and EPOCH_CLOSE transactions on BSV are cryptographically linked.
+        The Merkle root in EPOCH_CLOSE commits all ${d.records_count} inference records.
+        No record can be added, removed, or modified without invalidating the root hash —
+        a tamper attempt would be immediately detectable.
+        ${d.decided_at ? `<br><br><strong>EU AI Act:</strong> This epoch was sealed on
+        <strong>${new Date(d.decided_at).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})}</strong>
+        and constitutes an immutable audit trail suitable for Article 9 risk-management
+        and Article 13 transparency obligations.` : ''}
+      `;
+    } else {
+      infoBox.style.display = 'none';
+    }
+
+    document.getElementById('result').classList.add('active');
+  }
+
+  function renderError(msg) {
+    const d = { valid: false, tampered: false, error: msg,
+                epoch_id: '', system_id: '', records_count: 0,
+                merkle_root: '', model_id: null, model_version: null, decided_at: null };
+    _lastResult = d;
+    renderResult(d);
+  }
+
+  function downloadJson() {
+    if (!_lastResult) return;
+    const blob = new Blob([JSON.stringify(_lastResult, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `aria-verification-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
