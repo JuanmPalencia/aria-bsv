@@ -11,6 +11,7 @@ from sqlalchemy import (
     Column,
     Float,
     Integer,
+    LargeBinary,
     String,
     Text,
     create_engine,
@@ -57,6 +58,29 @@ class _RecordTable(_Base):
     aria_version = Column(String, nullable=False)
     record_hash = Column(String, nullable=False)
     created_at = Column(Integer, nullable=False)
+
+
+class _ZKProofTable(_Base):
+    __tablename__ = "aria_zk_proofs"
+
+    record_id = Column(String, primary_key=True)
+    epoch_id = Column(String, nullable=False, index=True)
+    proof_hex = Column(Text, nullable=False)
+    public_inputs_json = Column(Text, nullable=False, default="[]")
+    proving_system = Column(String, nullable=False)
+    tier = Column(String, nullable=False)
+    model_hash = Column(String, nullable=False)
+    prover_version = Column(String, nullable=False)
+    proof_digest = Column(String, nullable=False)
+
+
+class _VKTable(_Base):
+    __tablename__ = "aria_vk_keys"
+
+    model_hash = Column(String, primary_key=True)
+    vk_bytes = Column(LargeBinary, nullable=False)
+    proving_system = Column(String, nullable=False)
+    vk_digest = Column(String, nullable=False)
 
 
 def _row_to_audit_record(row: _RecordTable) -> AuditRecord:
@@ -215,3 +239,98 @@ class SQLiteStorage(StorageInterface):
                 .all()
             )
             return [_row_to_audit_record(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # ZK extension methods
+    # ------------------------------------------------------------------
+
+    def save_proof(self, proof: "Any") -> None:
+        """Persist a ZKProof to the aria_zk_proofs table."""
+        with self._lock, Session(self._engine) as session:
+            try:
+                row = _ZKProofTable(
+                    record_id=proof.record_id or proof.epoch_id,
+                    epoch_id=proof.epoch_id,
+                    proof_hex=proof.proof_bytes.hex(),
+                    public_inputs_json=json.dumps(proof.public_inputs),
+                    proving_system=proof.proving_system,
+                    tier=proof.tier,
+                    model_hash=proof.model_hash,
+                    prover_version=proof.prover_version,
+                    proof_digest=proof.digest(),
+                )
+                session.merge(row)
+                session.commit()
+            except Exception as exc:
+                session.rollback()
+                raise ARIAStorageError(f"save_proof failed: {exc}") from exc
+
+    def get_proof(self, record_id: str) -> "Any":
+        """Return the ZKProof for *record_id*, or None if not stored."""
+        from ..zk.base import ZKProof
+        with self._lock, Session(self._engine) as session:
+            row = session.get(_ZKProofTable, record_id)
+            if row is None:
+                return None
+            return ZKProof(
+                proof_bytes=bytes.fromhex(row.proof_hex),
+                public_inputs=json.loads(row.public_inputs_json),
+                proving_system=row.proving_system,
+                tier=row.tier,
+                model_hash=row.model_hash,
+                prover_version=row.prover_version,
+                epoch_id=row.epoch_id,
+                record_id=record_id if record_id != row.epoch_id else None,
+            )
+
+    def list_proofs_by_epoch(self, epoch_id: str) -> "list[Any]":
+        """Return all ZKProofs for *epoch_id*."""
+        from ..zk.base import ZKProof
+        with self._lock, Session(self._engine) as session:
+            rows = (
+                session.query(_ZKProofTable)
+                .filter(_ZKProofTable.epoch_id == epoch_id)
+                .all()
+            )
+            return [
+                ZKProof(
+                    proof_bytes=bytes.fromhex(r.proof_hex),
+                    public_inputs=json.loads(r.public_inputs_json),
+                    proving_system=r.proving_system,
+                    tier=r.tier,
+                    model_hash=r.model_hash,
+                    prover_version=r.prover_version,
+                    epoch_id=r.epoch_id,
+                    record_id=r.record_id if r.record_id != r.epoch_id else None,
+                )
+                for r in rows
+            ]
+
+    def save_vk(self, vk: "Any") -> None:
+        """Persist a VerifyingKey indexed by model_hash."""
+        with self._lock, Session(self._engine) as session:
+            try:
+                row = _VKTable(
+                    model_hash=vk.model_hash,
+                    vk_bytes=vk.vk_bytes,
+                    proving_system=vk.proving_system,
+                    vk_digest=vk.digest(),
+                )
+                session.merge(row)
+                session.commit()
+            except Exception as exc:
+                session.rollback()
+                raise ARIAStorageError(f"save_vk failed: {exc}") from exc
+
+    def get_vk(self, model_hash: str) -> "Any":
+        """Return the VerifyingKey for *model_hash*, or None."""
+        from ..zk.base import VerifyingKey
+        with self._lock, Session(self._engine) as session:
+            row = session.get(_VKTable, model_hash)
+            if row is None:
+                return None
+            return VerifyingKey(
+                vk_bytes=row.vk_bytes,
+                model_hash=row.model_hash,
+                proving_system=row.proving_system,
+            )

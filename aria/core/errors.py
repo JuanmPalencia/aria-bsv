@@ -68,6 +68,18 @@ class ARIAVerificationError(ARIAError):
     """
 
 
+class ARIAZKError(ARIAError):
+    """
+    Zero-knowledge proof operation failed.
+
+    Common causes:
+    - ZK prover library (e.g., ezkl) not installed — pip install aria-bsv[zk]
+    - Model too large for the configured prover tier
+    - Proof verification failed (cryptographic)
+    - Circuit compilation failed
+    """
+
+
 class ARIATamperDetected(ARIAError):
     """
     Cryptographic verification found evidence of tampering.

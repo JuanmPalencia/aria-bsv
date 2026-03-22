@@ -36,6 +36,10 @@ dependencies = [
 bsv = [
     "bsvlib>=0.4",              # BSV wallet + transaction building (DirectWallet)
 ]
+zk = [
+    "ezkl>=9.0",                # Halo2/KZG ZK prover for ONNX models (pip install aria-bsv[zk])
+    "onnx>=1.16",               # ONNX model loading/inspection
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

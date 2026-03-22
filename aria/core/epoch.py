@@ -12,6 +12,8 @@ from .hasher import hash_object
 from .merkle import ARIAMerkleTree
 from .record import AuditRecord
 
+from typing import Any
+
 if TYPE_CHECKING:
     from ..wallet.base import WalletInterface
     from ..broadcaster.base import BroadcasterInterface
@@ -177,6 +179,7 @@ class EpochManager:
         self,
         epoch_id: str,
         records: list[AuditRecord],
+        statement: Any | None = None,
     ) -> EpochCloseResult:
         """Publish an EPOCH_CLOSE transaction linking back to the EPOCH_OPEN.
 
@@ -207,7 +210,7 @@ class EpochManager:
         now_ms = int(time.time() * 1000)
         duration_ms = now_ms - (open_result.timestamp * 1000)
 
-        payload = {
+        payload: dict[str, Any] = {
             "aria_version": ARIA_VERSION,
             "type": "EPOCH_CLOSE",
             "epoch_id": epoch_id,
@@ -216,6 +219,10 @@ class EpochManager:
             "records_count": len(records),
             "duration_ms": duration_ms,
         }
+
+        # ZK extension: embed statement commitment in the on-chain payload.
+        if statement is not None:
+            payload["zk"] = statement.to_bsv_payload()
 
         txid = await self._wallet.sign_and_broadcast(payload)
 

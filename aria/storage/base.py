@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..core.record import AuditRecord
+
+if TYPE_CHECKING:
+    from ..zk.base import VerifyingKey, ZKProof
 
 
 @dataclass
@@ -86,3 +90,25 @@ class StorageInterface(ABC):
     @abstractmethod
     def list_records_by_epoch(self, epoch_id: str) -> list[AuditRecord]:
         """Return all AuditRecords belonging to *epoch_id*, ordered by sequence."""
+
+    # ------------------------------------------------------------------
+    # ZK extension methods — optional (default: no-op / return None)
+    # ------------------------------------------------------------------
+
+    def save_proof(self, proof: "ZKProof") -> None:
+        """Persist a ZKProof.  Default: no-op (ZK not configured)."""
+
+    def get_proof(self, record_id: str) -> "ZKProof | None":
+        """Return the ZKProof for *record_id*, or None if not stored."""
+        return None
+
+    def list_proofs_by_epoch(self, epoch_id: str) -> "list[ZKProof]":
+        """Return all ZKProofs for *epoch_id*."""
+        return []
+
+    def save_vk(self, vk: "VerifyingKey") -> None:
+        """Persist a VerifyingKey indexed by vk.model_hash.  Default: no-op."""
+
+    def get_vk(self, model_hash: str) -> "VerifyingKey | None":
+        """Return the VerifyingKey for *model_hash*, or None if not stored."""
+        return None

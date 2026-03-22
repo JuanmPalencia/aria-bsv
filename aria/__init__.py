@@ -35,6 +35,30 @@ from aria.wallet import BRC100Wallet, DirectWallet, WalletInterface
 from aria.auditor import AuditConfig, InferenceAuditor, Receipt
 from aria.storage import EpochRow, SQLiteStorage, StorageInterface
 from aria.verify import TxFetcher, VerificationResult, Verifier, WhatsOnChainFetcher
+from aria.zk import (
+    AggregateProof,
+    AllModelsRegistered,
+    Claim,
+    ClaimResult,
+    CommitmentProver,
+    ConfidencePercentile,
+    EpochStatement,
+    EZKLProver,
+    LatencyBound,
+    MerkleAggregator,
+    MockProver,
+    ModelUnchanged,
+    NoPIIInInputs,
+    NovaAggregator,
+    OutputDistribution,
+    ProofAggregatorInterface,
+    ProverInterface,
+    ProverTier,
+    ProvingKey,
+    RecordCountRange,
+    VerifyingKey,
+    ZKProof,
+)
 
 __version__ = "0.1.0"
 

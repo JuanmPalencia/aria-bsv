@@ -21,6 +21,10 @@ from .storage.sqlite import SQLiteStorage
 from .wallet.base import WalletInterface
 from .wallet.brc100 import BRC100Wallet
 from .wallet.direct import DirectWallet
+from .zk.aggregate import MerkleAggregator
+from .zk.base import ProverInterface
+from .zk.claims import Claim
+from .zk.statement import EpochStatement
 
 _log = logging.getLogger(__name__)
 
@@ -64,6 +68,10 @@ class AuditConfig:
     arc_api_key: str | None = None
     network: str = "mainnet"
     pii_fields: list[str] = field(default_factory=list)
+    # ZK extension — all optional.
+    zk_prover: ProverInterface | None = None
+    model_paths: dict[str, str] = field(default_factory=dict)
+    zk_claims: list[Claim] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.system_id:
@@ -131,8 +139,10 @@ class _BatchManager:
 
         self._lock = threading.Lock()
         self._pending: list[AuditRecord] = []
+        self._pending_proofs: list[Any] = []   # ZKProof objects if ZK enabled
         self._current_open: EpochOpenResult | None = None
         self._sequence: int = 0
+        self._proving_keys: dict[str, Any] = {}  # model_id -> ProvingKey
 
         # Signal to flush early (batch_size reached).
         self._flush_now = False
@@ -236,6 +246,16 @@ class _BatchManager:
         with self._lock:
             self._sequence = 0
 
+        # ZK setup: compile circuits and generate keys (once per model, cached).
+        if self._config.zk_prover and not self._proving_keys:
+            for model_id, model_path in self._config.model_paths.items():
+                try:
+                    pk, vk = await self._config.zk_prover.setup(model_id, model_path)
+                    self._proving_keys[model_id] = pk
+                    self._storage.save_vk(vk)
+                except Exception as exc:
+                    _log.warning("ZK setup failed for model %s: %s", model_id, exc)
+
         try:
             open_result = await self._epoch_manager.open_epoch(
                 model_hashes=self._model_hashes,
@@ -262,7 +282,9 @@ class _BatchManager:
         with self._lock:
             open_result = self._current_open
             records = list(self._pending)
+            proofs = list(self._pending_proofs)
             self._pending.clear()
+            self._pending_proofs.clear()
             self._current_open = None
 
         self._epoch_ready.clear()
@@ -270,10 +292,18 @@ class _BatchManager:
         if open_result is None:
             return
 
+        # Build EpochStatement (ZK claims + aggregate proof).
+        statement: EpochStatement | None = None
+        if self._config.zk_claims or self._config.zk_prover:
+            statement = await self._build_statement(
+                open_result.epoch_id, records, proofs, open_result.txid
+            )
+
         try:
             close_result = await self._epoch_manager.close_epoch(
                 epoch_id=open_result.epoch_id,
                 records=records,
+                statement=statement,
             )
             self._storage.save_epoch_close(
                 epoch_id=open_result.epoch_id,
@@ -284,6 +314,62 @@ class _BatchManager:
             )
         except Exception as exc:
             _log.error("EPOCH_CLOSE failed for %s: %s", open_result.epoch_id, exc)
+
+    async def _build_statement(
+        self,
+        epoch_id: str,
+        records: list[AuditRecord],
+        proofs: list[Any],
+        open_txid: str,
+    ) -> EpochStatement:
+        """Evaluate claims and aggregate proofs into an EpochStatement."""
+        import datetime
+
+        claim_results = [c.evaluate(records) for c in self._config.zk_claims]
+
+        aggregate = None
+        if proofs:
+            agg = MerkleAggregator()
+            aggregate = agg.aggregate(proofs, epoch_id)
+
+        return EpochStatement(
+            epoch_id=epoch_id,
+            system_id=self._config.system_id,
+            claims=claim_results,
+            aggregate_proof=aggregate,
+            open_txid=open_txid,
+            closed_at=datetime.datetime.now(datetime.timezone.utc),
+            n_records=len(records),
+        )
+
+    async def _prove_record(
+        self,
+        record: AuditRecord,
+        input_data: Any,
+        output_data: Any,
+    ) -> None:
+        """Generate ZK proof for a single record and persist it."""
+        prover = self._config.zk_prover
+        if prover is None:
+            return
+        pk = self._proving_keys.get(record.model_id)
+        if pk is None:
+            _log.debug("No proving key for model %s — skipping ZK proof", record.model_id)
+            return
+        try:
+            proof = await prover.prove(
+                model_id=record.model_id,
+                input_data=input_data if isinstance(input_data, dict) else {"input": input_data},
+                output_data=output_data if isinstance(output_data, dict) else {"output": output_data},
+                pk=pk,
+                record_id=record.record_id,
+                epoch_id=record.epoch_id,
+            )
+            self._storage.save_proof(proof)
+            with self._lock:
+                self._pending_proofs.append(proof)
+        except Exception as exc:
+            _log.warning("ZK prove failed for record %s: %s", record.record_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +492,12 @@ class InferenceAuditor:
             latency_ms=latency_ms,
             metadata=metadata or {},
         )
+        # Schedule ZK proof generation asynchronously (non-blocking).
+        if self._config.zk_prover:
+            asyncio.run_coroutine_threadsafe(
+                self._batch._prove_record(rec, sanitised_input, output),
+                self._batch._loop,
+            )
         return rec.record_id
 
     def track(self, model_id: str) -> Callable:  # type: ignore[type-arg]
