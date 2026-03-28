@@ -87,6 +87,14 @@ class AuditConfig:
         if self.network not in ("mainnet", "testnet"):
             raise ARIAConfigError("network must be 'mainnet' or 'testnet'")
 
+    def __repr__(self) -> str:
+        key_display = "<set>" if self.bsv_key is not None else "None"
+        return (
+            f"AuditConfig(system_id={self.system_id!r}, bsv_key={key_display}, "
+            f"brc100_url={self.brc100_url!r}, network={self.network!r}, "
+            f"storage={self.storage!r})"
+        )
+
 
 @dataclass
 class Receipt:

@@ -240,13 +240,17 @@ class WatchdogDaemon:
     def _update_baselines(self, closed_rows: list) -> None:
         """Compute per-epoch mean latency/confidence for the rolling window.
 
-        closed_rows is ordered DESC (newest first).  We reverse to oldest-first so
-        that appending to the baseline list preserves chronological order — the
-        spike-detection logic uses _latency_baseline[-1] as "current" and
-        _latency_baseline[:-1] as the historical baseline.
+        Epochs are sorted by opened_at ascending so that appending to the
+        baseline list preserves chronological order — the spike-detection logic
+        uses _latency_baseline[-1] as "current" and _latency_baseline[:-1] as
+        the historical baseline.
         """
-        # Oldest-first among unprocessed epochs
-        new_rows = [r for r in reversed(closed_rows) if r.epoch_id not in self._baseline_processed]
+        # Sort ascending by opened_at (robust against non-deterministic DB ordering
+        # when multiple epochs share the same millisecond timestamp)
+        new_rows = sorted(
+            [r for r in closed_rows if r.epoch_id not in self._baseline_processed],
+            key=lambda r: r.opened_at,
+        )
         # Only take the most recent window_epochs of those
         for row in new_rows[-self._window_epochs:]:
             try:
