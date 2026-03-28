@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: production
+
+scrape_configs:
+  - job_name: aria-portal
+    static_configs:
+      - targets: ["aria-portal:8080"]
+    metrics_path: /metrics
+
+  - job_name: aria-registry
+    static_configs:
+      - targets: ["aria-registry:8081"]
+    metrics_path: /metrics
