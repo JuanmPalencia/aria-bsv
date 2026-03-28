@@ -1,4 +1,4 @@
-"""aria.core — cryptographic primitives and protocol logic for ARIA (BRC-120)."""
+"""aria.core — cryptographic primitives and protocol logic for ARIA (BRC-121)."""
 
 from aria.core.epoch import EpochConfig, EpochManager, EpochOpenResult, EpochCloseResult
 from aria.core.errors import (

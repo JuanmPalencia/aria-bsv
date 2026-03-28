@@ -1,4 +1,4 @@
-"""EpochManager — Pre-Commitment Protocol lifecycle (BRC-120)."""
+"""EpochManager — Pre-Commitment Protocol lifecycle (BRC-121)."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class EpochCloseResult:
 class EpochManager:
     """Manages the OPEN / CLOSE lifecycle of ARIA pre-commitment epochs.
 
-    Each epoch follows the BRC-120 Pre-Commitment Protocol:
+    Each epoch follows the BRC-121 Pre-Commitment Protocol:
 
     1. ``open_epoch(model_hashes, system_state)`` — builds and broadcasts an
        ``EPOCH_OPEN`` transaction to BSV **before** any model executes.

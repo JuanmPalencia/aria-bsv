@@ -1,6 +1,6 @@
 """aria.zk — Zero-knowledge proof layer for ARIA.
 
-This package implements the ZK extension to BRC-120:
+This package implements the ZK extension to BRC-121:
 
   - ProverInterface / ZKProof / ProvingKey / VerifyingKey  (base.py)
   - MockProver                                              (mock_prover.py)

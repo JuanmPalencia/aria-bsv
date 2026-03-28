@@ -107,7 +107,7 @@ class EpochStatement:
         lines = [
             "=" * 72,
             "  ARIA EPOCH AUDIT REPORT",
-            "  BRC-120 Cryptographic Accountability — Auditable Real-time",
+            "  BRC-121 Cryptographic Accountability — Auditable Real-time",
             "  Inference Architecture",
             "=" * 72,
             "",
@@ -163,7 +163,7 @@ class EpochStatement:
                 "-" * 72,
                 "",
                 "  ZK proving not configured for this epoch.",
-                "  Pre-commitment anchoring (BRC-120) provides anti-backdating",
+                "  Pre-commitment anchoring (BRC-121) provides anti-backdating",
                 "  and anti-model-substitution guarantees.",
                 "",
             ]

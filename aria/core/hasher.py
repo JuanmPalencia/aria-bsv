@@ -7,7 +7,7 @@ This is the ONLY module that produces hashes in ARIA. All other modules
 that need to hash something must call functions from here. Never call
 hashlib directly outside this module.
 
-Canonical JSON rules (ARIA spec §4.6 / BRC-120):
+Canonical JSON rules (ARIA spec §4.6 / BRC-121):
   1. No whitespace (no spaces, no line breaks).
   2. Object keys sorted alphabetically at every nesting level.
   3. Floats: Python's default repr — shortest round-trip, max 17 sig digits.

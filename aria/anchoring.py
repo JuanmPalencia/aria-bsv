@@ -12,7 +12,7 @@ Protocol payload (identical on both chains)::
 
 Where:
   - ``ARIA``        — 4-byte magic prefix
-  - ``<version>``   — 0x01 = BRC-120 v1
+  - ``<version>``   — 0x01 = BRC-121 v1
   - ``<epoch_id>``  — first 16 bytes of epoch_id UTF-8 (zero-padded)
   - ``<merkle_root>`` — 32 raw bytes of the Merkle root hash
   - ``<records_count>`` — 4-byte big-endian record count

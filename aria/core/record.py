@@ -7,7 +7,7 @@ An AuditRecord captures everything needed to include one inference in an
 ARIA epoch's Merkle tree. Raw inputs and outputs never appear here; only
 their SHA-256 hashes (computed by the caller before constructing the record).
 
-Schema defined in BRC-120 §3.2.
+Schema defined in BRC-121 §3.2.
 """
 
 from __future__ import annotations

@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="KAIROS Emergency Dispatch",
-    description="AI-driven 112 emergency dispatch — ARIA-audited via BRC-120.",
+    description="AI-driven 112 emergency dispatch — ARIA-audited via BRC-121.",
     lifespan=lifespan,
 )
 

@@ -3,7 +3,7 @@ aria/core/merkle.py
 
 ARIA Merkle tree with second-preimage attack protection.
 
-Node hashing rules (BRC-120 §4.5 / RFC 6962):
+Node hashing rules (BRC-121 §4.5 / RFC 6962):
   Leaf node:     SHA-256( 0x00 || leaf_hash_bytes )
   Internal node: SHA-256( 0x01 || left_bytes || right_bytes )
 

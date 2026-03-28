@@ -1,4 +1,4 @@
-"""ARIA Registry — public directory of BRC-120-audited AI systems."""
+"""ARIA Registry — public directory of BRC-121-audited AI systems."""
 
 from .api import app
 from .schemas import EpochCreate, EpochRecord, SystemCreate, SystemRead

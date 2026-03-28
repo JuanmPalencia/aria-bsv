@@ -1,9 +1,34 @@
 """
-aria — Auditable Real-time Inference Architecture (BRC-120 reference implementation).
+aria — Auditable Real-time Inference Architecture (BRC-121 reference implementation).
 
-Phase 0 exports: core cryptographic primitives.
-Phase 1 exports: EpochManager, wallet and broadcaster interfaces.
-Phase 2 exports: InferenceAuditor, AuditConfig, storage.
+Quick start (zero blockchain knowledge required)::
+
+    from aria.quick import ARIAQuick
+
+    with ARIAQuick("my-system") as aria:
+        aria.record("gpt-4", {"prompt": "hello"}, {"text": "hi"}, confidence=0.99)
+        summary = aria.close()
+        print(summary)
+
+Full API::
+
+    from aria import AuditConfig, InferenceAuditor, SQLiteStorage
+    from aria.compliance import ComplianceChecker
+    from aria.drift import DriftDetector
+    from aria.events import InMemoryEventBus, EventType
+    from aria.alerts import SlackAlertChannel
+    from aria.metrics import ARIAMetrics
+
+Phase 0: Core cryptographic primitives.
+Phase 1: EpochManager, wallet and broadcaster interfaces.
+Phase 2: InferenceAuditor, AuditConfig, storage.
+Phase 3–17: Verification, ZK proofs, analytics, watchdog, compliance,
+             metrics, events, alerts, drift detection, ARIAQuick.
+Phase 18–22: AI SDK integrations (OpenAI, Anthropic, HuggingFace, LlamaIndex),
+             analytics (A/B testing, cost tracker, canary, lineage),
+             regulatory tools (GDPR, model cards, regulatory export),
+             infrastructure (shadow mode, replay, SIEM, multitenancy),
+             multi-chain (Ethereum, Nostr), federation, MLflow/W&B.
 """
 
 from aria.core import (
@@ -60,7 +85,7 @@ from aria.zk import (
     ZKProof,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "__version__",

@@ -415,6 +415,7 @@ class InferenceAuditor:
         _storage: StorageInterface | None = None,
     ) -> None:
         self._config = config
+        self._record_hooks: list[Callable[[AuditRecord], None]] = []
 
         # Storage
         self._storage: StorageInterface = _storage or SQLiteStorage(dsn=config.storage)
@@ -492,6 +493,13 @@ class InferenceAuditor:
             latency_ms=latency_ms,
             metadata=metadata or {},
         )
+        # Fire record hooks (events, metrics, telemetry) — never block the caller.
+        for hook in self._record_hooks:
+            try:
+                hook(rec)
+            except Exception as exc:
+                _log.warning("record hook error (%s): %s", getattr(hook, "__name__", hook), exc)
+
         # Schedule ZK proof generation asynchronously (non-blocking).
         if self._config.zk_prover:
             asyncio.run_coroutine_threadsafe(
@@ -576,6 +584,24 @@ class InferenceAuditor:
             record_hash=rec.hash(),
             model_id=rec.model_id,
         )
+
+    def add_record_hook(self, hook: Callable[[AuditRecord], None]) -> None:
+        """Register a callback called after every successful ``record()``.
+
+        Hooks receive the raw ``AuditRecord`` object.  Common uses::
+
+            auditor.add_record_hook(bus.emit_record)       # event bus
+            auditor.add_record_hook(metrics.on_record)     # prometheus
+            auditor.add_record_hook(otel.on_record)        # opentelemetry
+
+        Exceptions raised by hooks are caught and logged.
+        """
+        self._record_hooks.append(hook)
+
+    @property
+    def storage(self) -> StorageInterface:
+        """Read-only access to the underlying storage backend."""
+        return self._storage
 
     def flush(self) -> None:
         """Force an immediate epoch close and open a fresh one.

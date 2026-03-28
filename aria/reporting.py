@@ -11,7 +11,7 @@ The report includes:
   - Epoch metadata (ID, system, timestamps, tx hashes)
   - Merkle root and record count
   - Per-model statistics (record count, mean/p95 latency, mean confidence)
-  - Compliance summary (BRC-120 §6 checks)
+  - Compliance summary (BRC-121 §6 checks)
   - First N records table
 
 Usage::
@@ -218,40 +218,40 @@ class ReportGenerator:
     ) -> list[ComplianceCheck]:
         checks = []
 
-        # BRC-120 §6.1 — EPOCH_OPEN tx must exist
+        # BRC-121 §6.1 — EPOCH_OPEN tx must exist
         checks.append(ComplianceCheck(
-            name="BRC-120 §6.1 EPOCH_OPEN broadcast",
+            name="BRC-121 §6.1 EPOCH_OPEN broadcast",
             passed=bool(row.open_txid),
             detail=f"open_txid={row.open_txid or 'missing'}",
         ))
 
-        # BRC-120 §6.2 — EPOCH_CLOSE tx must exist
+        # BRC-121 §6.2 — EPOCH_CLOSE tx must exist
         checks.append(ComplianceCheck(
-            name="BRC-120 §6.2 EPOCH_CLOSE broadcast",
+            name="BRC-121 §6.2 EPOCH_CLOSE broadcast",
             passed=bool(row.close_txid),
             detail=f"close_txid={row.close_txid or 'missing'}",
         ))
 
-        # BRC-120 §6.3 — Merkle root must be present on close
+        # BRC-121 §6.3 — Merkle root must be present on close
         merkle_ok = bool(row.merkle_root) if row.close_txid else True  # N/A if open
         checks.append(ComplianceCheck(
-            name="BRC-120 §6.3 Merkle root integrity",
+            name="BRC-121 §6.3 Merkle root integrity",
             passed=merkle_ok,
             detail=f"merkle_root={row.merkle_root or 'missing'}",
         ))
 
-        # BRC-120 §6.4 — Model hashes must be committed
+        # BRC-121 §6.4 — Model hashes must be committed
         model_hashes_ok = len(row.model_hashes) > 0
         checks.append(ComplianceCheck(
-            name="BRC-120 §6.4 Model hash commitment",
+            name="BRC-121 §6.4 Model hash commitment",
             passed=model_hashes_ok,
             detail=f"{len(row.model_hashes)} model(s) committed",
         ))
 
-        # BRC-120 §6.5 — Record count consistency
+        # BRC-121 §6.5 — Record count consistency
         count_ok = len(records) == row.records_count or not row.close_txid
         checks.append(ComplianceCheck(
-            name="BRC-120 §6.5 Record count consistency",
+            name="BRC-121 §6.5 Record count consistency",
             passed=count_ok,
             detail=(
                 f"epoch.records_count={row.records_count}, "
@@ -303,7 +303,7 @@ def _render_text(report: EpochReport, records: list["AuditRecord"]) -> str:
     lines += [
         "",
         "─" * 70,
-        "COMPLIANCE CHECKS (BRC-120 / EU AI Act)",
+        "COMPLIANCE CHECKS (BRC-121 / EU AI Act)",
         "─" * 70,
     ]
     for c in report.compliance_checks:
@@ -448,7 +448,7 @@ _HTML_TEMPLATE = """\
 
 {records_section}
 
-<footer>ARIA &mdash; Auditable Real-time Inference Architecture &mdash; BRC-120 reference implementation</footer>
+<footer>ARIA &mdash; Auditable Real-time Inference Architecture &mdash; BRC-121 reference implementation</footer>
 </body>
 </html>
 """

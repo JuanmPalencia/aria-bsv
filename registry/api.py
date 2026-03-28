@@ -12,7 +12,7 @@ from .storage import RegistryStorage
 
 app = FastAPI(
     title="ARIA Registry",
-    description="Public directory of AI systems audited via BRC-120.",
+    description="Public directory of AI systems audited via BRC-121.",
     version="0.1.0",
 )
 
