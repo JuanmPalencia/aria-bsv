@@ -2,11 +2,12 @@
 
 > *Cryptographic accountability for production AI systems. No blockchain knowledge required.*
 
-[![CI](https://github.com/JuanMPalencia/aria-bsv/actions/workflows/ci.yml/badge.svg)](https://github.com/JuanMPalencia/aria-bsv/actions)
-[![PyPI version](https://badge.fury.io/py/aria-bsv.svg)](https://badge.fury.io/py/aria-bsv)
+[![CI](https://github.com/JuanmPalencia/aria-bsv/actions/workflows/ci.yml/badge.svg)](https://github.com/JuanmPalencia/aria-bsv/actions)
+[![PyPI version](https://img.shields.io/pypi/v/aria-bsv.svg)](https://pypi.org/project/aria-bsv/)
+[![Tests](https://img.shields.io/badge/tests-1578%20passing-brightgreen.svg)](https://github.com/JuanmPalencia/aria-bsv/actions)
 [![License: Open BSV](https://img.shields.io/badge/License-Open%20BSV-blue.svg)](LICENSE)
-[![BRC-120](https://img.shields.io/badge/Standard-BRC--120-orange.svg)](brc/0120.md)
-[![EU AI Act](https://img.shields.io/badge/EU%20AI%20Act-Art.%2012%20compliant-green.svg)](docs/03-eu-ai-act-compliance.md)
+[![BRC-121](https://img.shields.io/badge/Standard-BRC--121-orange.svg)](https://github.com/bitcoin-sv/BRCs/pull/129)
+[![EU AI Act](https://img.shields.io/badge/EU%20AI%20Act-Art.%2012%20compliant-green.svg)](https://github.com/JuanmPalencia/aria-bsv)
 
 ---
 
@@ -16,7 +17,7 @@ ARIA is an open protocol and Python SDK that makes any AI system independently a
 
 It works by publishing cryptographic commitments to the [BSV blockchain](https://bitcoinsv.io) before and after each inference cycle. These commitments make it impossible to alter or fabricate AI decision records after the fact.
 
-ARIA is the reference implementation of **[BRC-120](brc/0120.md)** — the first open standard for AI inference accountability on BSV.
+ARIA is the reference implementation of **[BRC-121](brc/0121.md)** — the first open standard for AI inference accountability on BSV.
 
 ---
 
@@ -95,7 +96,7 @@ This makes backdating and model substitution cryptographically impossible.
 │  Layer 3 — Verification Portal                       │
 │  Paste a txid. See what the AI decided. No crypto.   │
 ├──────────────────────────────────────────────────────┤
-│  Layer 2 — BRC-120 Standard                          │
+│  Layer 2 — BRC-121 Standard                          │
 │  Open protocol. Any language can implement it.       │
 ├──────────────────────────────────────────────────────┤
 │  Layer 1 — Python SDK (aria-bsv)                     │
@@ -116,7 +117,7 @@ ARIA covers the following requirements of Regulation (EU) 2024/1689 for high-ris
 | Art. 12.3 | Independent post-hoc verification | `verify.py` + Portal |
 | Art. 9 | Continuous risk management | AI Systems Registry |
 | Art. 13 | Transparency to users | Public verification portal |
-| Art. 11 | Pre-deployment technical documentation | BRC-120 spec |
+| Art. 11 | Pre-deployment technical documentation | BRC-121 spec |
 
 Full mapping: [docs/03-eu-ai-act-compliance.md](docs/03-eu-ai-act-compliance.md)
 
@@ -135,13 +136,9 @@ Full mapping: [docs/03-eu-ai-act-compliance.md](docs/03-eu-ai-act-compliance.md)
 
 | Document | Description |
 |----------|-------------|
-| [ARIA_BIBLE.md](ARIA_BIBLE.md) | Complete authoritative specification |
-| [docs/01-whitepaper.md](docs/01-whitepaper.md) | Problem, solution, architecture |
-| [docs/02-protocol-spec.md](docs/02-protocol-spec.md) | BRC-120 wire format and rules |
-| [docs/03-eu-ai-act-compliance.md](docs/03-eu-ai-act-compliance.md) | Regulatory mapping |
-| [docs/04-security-model.md](docs/04-security-model.md) | Threat model and guarantees |
-| [docs/07-getting-started.md](docs/07-getting-started.md) | From zero to first audited inference |
-| [brc/0120.md](brc/0120.md) | BRC-120 formal specification |
+| [BRC-121 spec](https://github.com/bitcoin-sv/BRCs/pull/129) | Formal protocol specification |
+| [examples/minimal/](examples/minimal/) | Quickstart — 5 lines, zero config |
+| [examples/kairos/](examples/kairos/) | Production example — KAIROS CDS integration |
 
 ---
 
@@ -159,7 +156,7 @@ aria-bsv/
 │   └── auditor.py         # Main public API
 ├── portal/                # Verification web app (FastAPI + React)
 ├── registry/              # AI Systems Registry API
-├── brc/0120.md            # BRC-120 specification
+├── brc/0121.md            # BRC-121 specification
 ├── docs/                  # Full documentation (9 documents)
 ├── examples/              # kairos/, urban-vs/, minimal/
 ├── tests/                 # unit/, integration/, fixtures/
@@ -183,9 +180,9 @@ To report a security vulnerability: see [SECURITY.md](SECURITY.md)
 
 ## Status
 
-ARIA is under active development. Current phase: **0 — Core cryptographic primitives**.
+ARIA v0.4.0 — **all phases complete**. 1578 tests passing. Mainnet-verified.
 
-See [PROGRESS.md](PROGRESS.md) for detailed task tracking.
+BRC-121 PR open: [bitcoin-sv/BRCs#129](https://github.com/bitcoin-sv/BRCs/pull/129)
 
 ---
 
@@ -193,7 +190,7 @@ See [PROGRESS.md](PROGRESS.md) for detailed task tracking.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-This project proposes [BRC-120](brc/0120.md) as an open standard to the BSV ecosystem. Implementations in other languages that follow the spec are welcome and will be listed here.
+This project proposes [BRC-121](brc/0121.md) as an open standard to the BSV ecosystem. Implementations in other languages that follow the spec are welcome and will be listed here.
 
 ---
 
