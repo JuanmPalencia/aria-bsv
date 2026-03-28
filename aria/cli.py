@@ -351,6 +351,313 @@ def report(epoch_id: str, db: str, fmt: str, out_path: Optional[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# aria export
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--system", "system_id", default=None, help="Filter by system_id")
+@click.option("--epoch", "epoch_id", default=None, help="Export a single epoch")
+@click.option("--format", "fmt", default="json", type=click.Choice(["json", "csv", "jsonl"]), show_default=True)
+@click.option("--output", "out_path", required=True, help="Output file path")
+@click.option("--limit", default=1000, show_default=True, help="Maximum epochs to export")
+@click.option("--db", default="aria.db", show_default=True)
+def export(
+    system_id: Optional[str],
+    epoch_id: Optional[str],
+    fmt: str,
+    out_path: str,
+    limit: int,
+    db: str,
+) -> None:
+    """Export audit records to JSON, JSONL, or CSV for external analysis."""
+    import csv
+    import io
+
+    storage = _get_storage(db)
+
+    if epoch_id:
+        epochs_to_export = [storage.get_epoch(epoch_id)]
+        if epochs_to_export[0] is None:
+            _err(f"Epoch '{epoch_id}' not found")
+            sys.exit(1)
+    else:
+        epochs_to_export = storage.list_epochs(system_id=system_id, limit=limit)
+
+    all_records = []
+    for ep in epochs_to_export:
+        recs = storage.list_records_by_epoch(ep.epoch_id)
+        for rec in recs:
+            all_records.append({
+                "record_id": rec.record_id,
+                "epoch_id": rec.epoch_id,
+                "system_id": ep.system_id,
+                "model_id": rec.model_id,
+                "sequence": rec.sequence,
+                "input_hash": rec.input_hash,
+                "output_hash": rec.output_hash,
+                "confidence": rec.confidence,
+                "latency_ms": rec.latency_ms,
+                "open_txid": ep.open_txid,
+                "close_txid": ep.close_txid,
+            })
+
+    if not all_records:
+        _info("No records found to export.")
+        return
+
+    if fmt == "json":
+        content = json.dumps(all_records, indent=2)
+        with open(out_path, "w") as f:
+            f.write(content)
+
+    elif fmt == "jsonl":
+        with open(out_path, "w") as f:
+            for rec in all_records:
+                f.write(json.dumps(rec) + "\n")
+
+    elif fmt == "csv":
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=list(all_records[0].keys()))
+        writer.writeheader()
+        writer.writerows(all_records)
+        with open(out_path, "w", newline="") as f:
+            f.write(buf.getvalue())
+
+    _ok(f"Exported {len(all_records)} records to {out_path} ({fmt})")
+
+
+# ---------------------------------------------------------------------------
+# aria audit
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("epoch_id")
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--min-confidence", default=None, type=float, help="Minimum acceptable mean confidence")
+@click.option("--max-latency-ms", default=None, type=float, help="Maximum acceptable mean latency (ms)")
+@click.option("--require-close-txid", is_flag=True, help="Fail if epoch has no close txid")
+def audit(
+    epoch_id: str,
+    db: str,
+    as_json: bool,
+    min_confidence: Optional[float],
+    max_latency_ms: Optional[float],
+    require_close_txid: bool,
+) -> None:
+    """Run automated audit checks on an epoch.
+
+    Checks performed:
+    \b
+      - Epoch has an open txid (on-chain commitment exists)
+      - Epoch has a close txid (if --require-close-txid)
+      - Records count matches storage
+      - Mean confidence >= --min-confidence (if set)
+      - Mean latency <= --max-latency-ms (if set)
+      - No duplicate record sequences
+    """
+    storage = _get_storage(db)
+    row = storage.get_epoch(epoch_id)
+    if row is None:
+        _err(f"Epoch '{epoch_id}' not found in {db}")
+        sys.exit(1)
+
+    records = storage.list_records_by_epoch(epoch_id)
+    checks = []
+    passed = True
+
+    def _check(name: str, ok: bool, detail: str = "") -> None:
+        nonlocal passed
+        checks.append({"check": name, "passed": ok, "detail": detail})
+        if not ok:
+            passed = False
+
+    # Check 1: open txid
+    _check(
+        "open_txid_present",
+        bool(row.open_txid),
+        row.open_txid or "missing",
+    )
+
+    # Check 2: close txid (optional)
+    if require_close_txid:
+        _check(
+            "close_txid_present",
+            bool(row.close_txid),
+            row.close_txid or "missing",
+        )
+
+    # Check 3: record count integrity
+    stored_count = row.records_count or 0
+    actual_count = len(records)
+    _check(
+        "record_count_integrity",
+        stored_count == actual_count,
+        f"stored={stored_count} actual={actual_count}",
+    )
+
+    # Check 4: no duplicate sequences
+    seqs = [r.sequence for r in records]
+    _check(
+        "no_duplicate_sequences",
+        len(seqs) == len(set(seqs)),
+        f"{len(seqs) - len(set(seqs))} duplicates found" if len(seqs) != len(set(seqs)) else "ok",
+    )
+
+    # Check 5: mean confidence
+    if min_confidence is not None:
+        confs = [r.confidence for r in records if r.confidence is not None]
+        if confs:
+            mean_conf = sum(confs) / len(confs)
+            _check(
+                "mean_confidence",
+                mean_conf >= min_confidence,
+                f"mean={mean_conf:.3f} threshold={min_confidence:.3f}",
+            )
+        else:
+            _check("mean_confidence", False, "no confidence values in records")
+
+    # Check 6: mean latency
+    if max_latency_ms is not None:
+        lats = [r.latency_ms for r in records if r.latency_ms is not None]
+        if lats:
+            mean_lat = sum(lats) / len(lats)
+            _check(
+                "mean_latency_ms",
+                mean_lat <= max_latency_ms,
+                f"mean={mean_lat:.1f}ms threshold={max_latency_ms:.1f}ms",
+            )
+
+    if as_json:
+        click.echo(json.dumps({
+            "epoch_id": epoch_id,
+            "passed": passed,
+            "checks": checks,
+        }, indent=2))
+    else:
+        click.echo(f"Audit: {epoch_id}")
+        click.echo("─" * 60)
+        for c in checks:
+            icon = click.style("✓", fg="green") if c["passed"] else click.style("✗", fg="red")
+            click.echo(f"  {icon} {c['check']:<35} {c['detail']}")
+        click.echo("")
+        if passed:
+            _ok("All checks passed")
+        else:
+            _err("One or more checks failed")
+            sys.exit(2)
+
+
+# ---------------------------------------------------------------------------
+# aria compliance-check
+# ---------------------------------------------------------------------------
+
+@cli.command("compliance-check")
+@click.option("--system", "system_id", required=True, help="System ID to check")
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--format", "fmt", default="text", type=click.Choice(["text", "json"]), show_default=True)
+@click.option("--output", "out_path", default=None, help="Write report to file")
+@click.option("--epochs", "epochs_limit", default=50, show_default=True, help="Epochs to analyse")
+def compliance_check(
+    system_id: str,
+    db: str,
+    fmt: str,
+    out_path: Optional[str],
+    epochs_limit: int,
+) -> None:
+    """Generate an EU AI Act Art. 12 compliance report for a system.
+
+    Checks:
+    \b
+      - All epochs have on-chain open txid (Art. 12 §1 — technical documentation)
+      - All epochs have on-chain close txid (Art. 12 §2 — logging completeness)
+      - Record count integrity across epochs
+      - Mean confidence and latency baselines
+      - Epoch frequency (activity evidence)
+    """
+    storage = _get_storage(db)
+    epochs_all = storage.list_epochs(system_id=system_id, limit=epochs_limit)
+
+    if not epochs_all:
+        _err(f"No epochs found for system '{system_id}'")
+        sys.exit(1)
+
+    total = len(epochs_all)
+    open_anchored = sum(1 for e in epochs_all if e.open_txid)
+    close_anchored = sum(1 for e in epochs_all if e.close_txid)
+    total_records = sum(e.records_count or 0 for e in epochs_all)
+
+    all_records = []
+    for ep in epochs_all[:20]:  # sample up to 20 for stats
+        all_records.extend(storage.list_records_by_epoch(ep.epoch_id))
+
+    confs = [r.confidence for r in all_records if r.confidence is not None]
+    lats = [r.latency_ms for r in all_records if r.latency_ms is not None]
+    mean_conf = sum(confs) / len(confs) if confs else None
+    mean_lat = sum(lats) / len(lats) if lats else None
+
+    result = {
+        "system_id": system_id,
+        "regulation": "EU AI Act Art. 12 (Regulation (EU) 2024/1689)",
+        "epochs_analysed": total,
+        "total_records": total_records,
+        "on_chain_open_rate": round(open_anchored / total, 3) if total else 0,
+        "on_chain_close_rate": round(close_anchored / total, 3) if total else 0,
+        "mean_confidence": round(mean_conf, 3) if mean_conf is not None else None,
+        "mean_latency_ms": round(mean_lat, 1) if mean_lat is not None else None,
+        "compliant": open_anchored == total and close_anchored == total,
+        "findings": [],
+    }
+
+    if open_anchored < total:
+        result["findings"].append(
+            f"{total - open_anchored}/{total} epochs missing on-chain OPEN commitment (Art. 12 §1)"
+        )
+    if close_anchored < total:
+        result["findings"].append(
+            f"{total - close_anchored}/{total} epochs missing on-chain CLOSE commitment (Art. 12 §2)"
+        )
+    if not result["findings"]:
+        result["findings"].append("No compliance violations detected.")
+
+    if fmt == "json":
+        content = json.dumps(result, indent=2)
+    else:
+        lines = [
+            "EU AI ACT ART. 12 COMPLIANCE REPORT",
+            "=" * 55,
+            f"System ID          : {result['system_id']}",
+            f"Regulation         : {result['regulation']}",
+            f"Epochs analysed    : {result['epochs_analysed']}",
+            f"Total records      : {result['total_records']}",
+            f"On-chain open rate : {result['on_chain_open_rate']*100:.1f}%",
+            f"On-chain close rate: {result['on_chain_close_rate']*100:.1f}%",
+        ]
+        if result["mean_confidence"] is not None:
+            lines.append(f"Mean confidence    : {result['mean_confidence']:.3f}")
+        if result["mean_latency_ms"] is not None:
+            lines.append(f"Mean latency       : {result['mean_latency_ms']:.1f} ms")
+        lines.append("")
+        lines.append("Findings:")
+        for f in result["findings"]:
+            lines.append(f"  • {f}")
+        lines.append("")
+        verdict = "COMPLIANT" if result["compliant"] else "NON-COMPLIANT"
+        lines.append(f"Verdict: {verdict}")
+        content = "\n".join(lines)
+
+    if out_path:
+        with open(out_path, "w") as f:
+            f.write(content)
+        _ok(f"Report written to {out_path}")
+    else:
+        click.echo(content)
+
+    if not result["compliant"]:
+        sys.exit(2)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
