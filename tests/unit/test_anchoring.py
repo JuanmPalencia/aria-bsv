@@ -151,7 +151,7 @@ class TestBuildOpReturnScript:
 
 class TestBTCBroadcaster:
     @pytest.mark.asyncio
-    async def test_broadcast_returns_stub_result(self):
+    async def test_broadcast_without_wif_returns_error(self):
         broadcaster = BTCBroadcaster()
         payload = AnchorPayload.from_epoch_close("ep-btc", "0" * 64, 5)
         result = await broadcaster.broadcast(payload.canonical_bytes())
@@ -159,7 +159,7 @@ class TestBTCBroadcaster:
         assert isinstance(result, AnchorResult)
         assert result.chain == "btc"
         assert result.success is False
-        assert "stub" in (result.error or "").lower()
+        assert result.error is not None
 
 
 # ---------------------------------------------------------------------------
@@ -196,3 +196,166 @@ class TestMultiChainAnchor:
         chains = {r.chain for r in results}
         assert "btc" in chains
         assert "solana" in chains
+
+
+# ---------------------------------------------------------------------------
+# BTCBroadcaster — full implementation tests
+# ---------------------------------------------------------------------------
+
+from aria.anchoring import (
+    _varint, _hash256, _hash160, _p2pkh_script,
+    _base58_decode, _decode_wif, _privkey_to_pubkey, _build_btc_tx,
+)
+
+
+class TestBTCInternalHelpers:
+    def test_varint_single_byte(self):
+        assert _varint(0) == b"\x00"
+        assert _varint(252) == b"\xfc"
+
+    def test_varint_fd_prefix(self):
+        enc = _varint(253)
+        assert enc[0:1] == b"\xfd"
+        assert len(enc) == 3
+
+    def test_hash256_known_value(self):
+        import hashlib
+        result = _hash256(b"")
+        expected = hashlib.sha256(hashlib.sha256(b"").digest()).digest()
+        assert result == expected
+
+    def test_hash160_known_value(self):
+        import hashlib
+        result = _hash160(b"\x00")
+        h1 = hashlib.sha256(b"\x00").digest()
+        h2 = hashlib.new("ripemd160", h1).digest()
+        assert result == h2
+
+    def test_p2pkh_script_is_25_bytes(self):
+        fake_pubkey = b"\x02" + b"\x11" * 32
+        script = _p2pkh_script(fake_pubkey)
+        assert len(script) == 25
+        assert script[0] == 0x76   # OP_DUP
+        assert script[-1] == 0xAC  # OP_CHECKSIG
+
+    def test_decode_wif_compressed(self):
+        # Known mainnet compressed WIF (test vector)
+        # Private key: 0x01 (trivial, for testing)
+        # We use a WIF derived from a known key
+        import base64
+        import hashlib
+        # Build a valid WIF manually
+        privkey = b"\x01" * 32
+        payload = b"\x80" + privkey + b"\x01"  # compressed
+        checksum = hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+        raw = payload + checksum
+        # Base58 encode
+        ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        n = int.from_bytes(raw, "big")
+        result = ""
+        while n:
+            n, r = divmod(n, 58)
+            result = ALPHABET[r] + result
+        wif = result
+        decoded_key, compressed = _decode_wif(wif)
+        assert decoded_key == privkey
+        assert compressed is True
+
+    def test_privkey_to_pubkey_returns_bytes(self):
+        privkey = b"\x01" * 32
+        pub = _privkey_to_pubkey(privkey, compressed=True)
+        assert isinstance(pub, bytes)
+        assert len(pub) == 33  # compressed secp256k1 pubkey
+
+    def test_privkey_to_pubkey_uncompressed(self):
+        privkey = b"\x01" * 32
+        pub = _privkey_to_pubkey(privkey, compressed=False)
+        assert isinstance(pub, bytes)
+        assert len(pub) == 65  # uncompressed secp256k1 pubkey
+        assert pub[0] == 0x04
+
+
+class TestBTCBroadcasterNoKey:
+    @pytest.mark.asyncio
+    async def test_broadcast_without_wif_returns_error(self):
+        broadcaster = BTCBroadcaster()
+        payload = AnchorPayload.from_epoch_close("ep-btc", "0" * 64, 5)
+        result = await broadcaster.broadcast(payload.canonical_bytes())
+        assert result.success is False
+        assert result.error is not None
+        assert "wif" in result.error.lower() or "broadcast_signed" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_broadcast_signed_network_error(self):
+        broadcaster = BTCBroadcaster(api_url="http://localhost:19999")
+        result = await broadcaster.broadcast_signed("deadbeef")
+        assert result.success is False
+        assert result.chain == "btc"
+
+    def test_invalid_wif_raises(self):
+        import pytest
+        with pytest.raises((ValueError, Exception)):
+            BTCBroadcaster(wif="not-a-valid-wif")
+
+
+class TestBTCBroadcasterWithKey:
+    def _make_wif(self, privkey: bytes) -> str:
+        import hashlib
+        payload = b"\x80" + privkey + b"\x01"
+        checksum = hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+        raw = payload + checksum
+        ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        n = int.from_bytes(raw, "big")
+        result = ""
+        while n:
+            n, r = divmod(n, 58)
+            result = ALPHABET[r] + result
+        return result
+
+    def test_broadcaster_initializes_with_valid_wif(self):
+        wif = self._make_wif(b"\x11" * 32)
+        b = BTCBroadcaster(wif=wif)
+        assert b._privkey == b"\x11" * 32
+
+    def test_derive_address_returns_string(self):
+        wif = self._make_wif(b"\x11" * 32)
+        b = BTCBroadcaster(wif=wif)
+        addr = b._derive_address()
+        assert isinstance(addr, str)
+        assert addr.startswith("1")  # mainnet P2PKH
+
+    @pytest.mark.asyncio
+    async def test_broadcast_no_utxos_returns_error(self, respx_mock=None):
+        pytest.importorskip("respx")
+        import respx, httpx
+        wif = self._make_wif(b"\x11" * 32)
+        broadcaster = BTCBroadcaster(wif=wif, api_url="https://blockstream.info/api")
+        addr = broadcaster._derive_address()
+        with respx.mock:
+            respx.get(f"https://blockstream.info/api/address/{addr}/utxo").mock(
+                return_value=httpx.Response(200, json=[])
+            )
+            payload = AnchorPayload.from_epoch_close("ep", "0" * 64, 1)
+            result = await broadcaster.broadcast(payload.canonical_bytes())
+        assert result.success is False
+        assert "utxo" in (result.error or "").lower()
+
+    def test_build_btc_tx_produces_valid_hex(self):
+        privkey = b"\x11" * 32
+        data = b"ARIA" + b"\x00" * 68
+        raw_hex = _build_btc_tx(
+            utxo_txid="a" * 64,
+            utxo_vout=0,
+            utxo_satoshis=100_000,
+            op_return_data=data[:72],
+            privkey=privkey,
+            compressed=True,
+            fee_sat=2000,
+        )
+        assert isinstance(raw_hex, str)
+        assert len(raw_hex) > 0
+        tx_bytes = bytes.fromhex(raw_hex)
+        # Check version (first 4 bytes, LE) = 1
+        import struct
+        version = struct.unpack("<I", tx_bytes[:4])[0]
+        assert version == 1

@@ -156,3 +156,157 @@ class TestNovaAggregator:
         )
         with pytest.raises(ARIAZKError):
             nova.verify_aggregate(dummy, [])
+
+
+# ---------------------------------------------------------------------------
+# NovaAggregator — remote service (mocked HTTP)
+# ---------------------------------------------------------------------------
+
+class TestNovaAggregator:
+    def test_aggregate_calls_service(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        proofs = [_fake_proof(f"rec_{i}") for i in range(3)]
+        agg_bytes = b"\xca\xfe" * 16
+
+        with respx.mock:
+            respx.post("https://nova.test/aggregate").mock(
+                return_value=httpx.Response(200, json={
+                    "proofs_merkle_root": "sha256:" + "e" * 64,
+                    "aggregate_bytes": agg_bytes.hex(),
+                    "epoch_id": "ep_test",
+                })
+            )
+            nova = NovaAggregator(service_url="https://nova.test")
+            result = nova.aggregate(proofs, "ep_test")
+
+        assert result.aggregation_scheme == "nova"
+        assert result.n_proofs == 3
+        assert result.aggregate_bytes == agg_bytes
+
+    def test_aggregate_service_error_raises_aria_zk_error(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        proofs = [_fake_proof("rec_0")]
+        with respx.mock:
+            respx.post("https://nova.test/aggregate").mock(
+                return_value=httpx.Response(503, text="Service Unavailable")
+            )
+            nova = NovaAggregator(service_url="https://nova.test")
+            with pytest.raises(ARIAZKError, match="503"):
+                nova.aggregate(proofs, "ep_test")
+
+    def test_aggregate_network_error_raises_aria_zk_error(self):
+        proofs = [_fake_proof("rec_0")]
+        nova = NovaAggregator(service_url="http://localhost:19999", timeout=1.0)
+        with pytest.raises(ARIAZKError, match="unreachable"):
+            nova.aggregate(proofs, "ep_test")
+
+    def test_verify_returns_true_on_valid(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        proofs = [_fake_proof("rec_0")]
+        agg = AggregateProof(
+            proofs_merkle_root="sha256:" + "e" * 64,
+            n_proofs=1,
+            aggregation_scheme="nova",
+            aggregate_bytes=b"\x00" * 16,
+            epoch_id="ep_test",
+        )
+        with respx.mock:
+            respx.post("https://nova.test/verify").mock(
+                return_value=httpx.Response(200, json={"valid": True})
+            )
+            nova = NovaAggregator(service_url="https://nova.test")
+            valid = nova.verify_aggregate(agg, proofs)
+        assert valid is True
+
+    def test_verify_returns_false_on_service_error(self):
+        proofs = [_fake_proof("rec_0")]
+        agg = AggregateProof(
+            proofs_merkle_root="sha256:" + "e" * 64,
+            n_proofs=1,
+            aggregation_scheme="nova",
+            aggregate_bytes=b"\x00" * 16,
+            epoch_id="ep_test",
+        )
+        nova = NovaAggregator(service_url="http://localhost:19999", timeout=1.0)
+        result = nova.verify_aggregate(agg, proofs)
+        assert result is False
+
+    def test_empty_proofs_aggregate(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        with respx.mock:
+            respx.post("https://nova.test/aggregate").mock(
+                return_value=httpx.Response(200, json={
+                    "proofs_merkle_root": "sha256:" + "0" * 64,
+                    "aggregate_bytes": "",
+                    "epoch_id": "ep_empty",
+                })
+            )
+            nova = NovaAggregator(service_url="https://nova.test")
+            result = nova.aggregate([], "ep_empty")
+        assert result.n_proofs == 0
+        assert result.aggregate_bytes == b""
+
+
+# ---------------------------------------------------------------------------
+# PlonkRecursiveAggregator — remote service (mocked HTTP)
+# ---------------------------------------------------------------------------
+
+class TestPlonkRecursiveAggregator:
+    def test_aggregate_scheme_is_plonk_recursive(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        from aria.zk.aggregate import PlonkRecursiveAggregator
+        proofs = [_fake_proof(f"rec_{i}") for i in range(2)]
+        with respx.mock:
+            respx.post("https://plonk.test/aggregate").mock(
+                return_value=httpx.Response(200, json={
+                    "proofs_merkle_root": "sha256:" + "f" * 64,
+                    "aggregate_bytes": (b"\xbe\xef" * 16).hex(),
+                    "epoch_id": "ep_test",
+                })
+            )
+            plonk = PlonkRecursiveAggregator(service_url="https://plonk.test")
+            result = plonk.aggregate(proofs, "ep_test")
+        assert result.aggregation_scheme == "plonk_recursive"
+
+    def test_aggregate_stores_prev_aggregate(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        from aria.zk.aggregate import PlonkRecursiveAggregator
+        proofs = [_fake_proof("rec_0")]
+        with respx.mock:
+            respx.post("https://plonk.test/aggregate").mock(
+                return_value=httpx.Response(200, json={
+                    "proofs_merkle_root": "sha256:" + "f" * 64,
+                    "aggregate_bytes": (b"\xbe\xef" * 16).hex(),
+                    "epoch_id": "ep_test",
+                })
+            )
+            plonk = PlonkRecursiveAggregator(service_url="https://plonk.test")
+            plonk.aggregate(proofs, "ep_test")
+        assert plonk._prev_aggregate is not None
+        assert plonk._prev_aggregate.epoch_id == "ep_test"
+
+    def test_verify_returns_true(self):
+        pytest.importorskip("respx")
+        import respx, httpx
+        from aria.zk.aggregate import PlonkRecursiveAggregator
+        proofs = [_fake_proof("rec_0")]
+        agg = AggregateProof(
+            proofs_merkle_root="sha256:" + "f" * 64,
+            n_proofs=1,
+            aggregation_scheme="plonk_recursive",
+            aggregate_bytes=b"\x00" * 16,
+            epoch_id="ep_test",
+        )
+        with respx.mock:
+            respx.post("https://plonk.test/verify").mock(
+                return_value=httpx.Response(200, json={"valid": True})
+            )
+            plonk = PlonkRecursiveAggregator(service_url="https://plonk.test")
+            valid = plonk.verify_aggregate(agg, proofs)
+        assert valid is True

@@ -35,7 +35,9 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import hmac
 import struct
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -44,6 +46,151 @@ import httpx
 
 if TYPE_CHECKING:
     pass
+
+
+# ---------------------------------------------------------------------------
+# Minimal BTC raw-transaction builder / signer (secp256k1, P2PKH, SIGHASH_ALL)
+# ---------------------------------------------------------------------------
+
+def _varint(n: int) -> bytes:
+    if n < 0xFD:
+        return bytes([n])
+    elif n <= 0xFFFF:
+        return b"\xfd" + struct.pack("<H", n)
+    elif n <= 0xFFFFFFFF:
+        return b"\xfe" + struct.pack("<I", n)
+    return b"\xff" + struct.pack("<Q", n)
+
+
+def _hash256(data: bytes) -> bytes:
+    return hashlib.sha256(hashlib.sha256(data).digest()).digest()
+
+
+def _hash160(data: bytes) -> bytes:
+    return hashlib.new("ripemd160", hashlib.sha256(data).digest()).digest()
+
+
+def _p2pkh_script(pubkey_bytes: bytes) -> bytes:
+    h = _hash160(pubkey_bytes)
+    return bytes([0x76, 0xA9, 0x14]) + h + bytes([0x88, 0xAC])
+
+
+def _base58_decode(s: str) -> bytes:
+    ALPHABET = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    n = 0
+    for c in s.encode():
+        n = n * 58 + ALPHABET.index(c)
+    result = n.to_bytes(38, "big").lstrip(b"\x00")
+    # restore leading zero bytes
+    pad = len(s) - len(s.lstrip("1"))
+    return b"\x00" * pad + result
+
+
+def _decode_wif(wif: str) -> tuple[bytes, bool]:
+    """Return (privkey_32_bytes, compressed)."""
+    raw = _base58_decode(wif)
+    # raw = version(1) + key(32) [+ 0x01 if compressed] + checksum(4)
+    payload = raw[:-4]
+    compressed = len(payload) == 34 and payload[-1] == 0x01
+    privkey = payload[1:33]
+    return privkey, compressed
+
+
+def _privkey_to_pubkey(privkey: bytes, compressed: bool = True) -> bytes:
+    try:
+        import coincurve
+        return coincurve.PublicKey.from_valid_secret(privkey).format(compressed=compressed)
+    except ImportError:
+        pass
+    # Fallback: use cryptography library
+    from cryptography.hazmat.primitives.asymmetric.ec import (
+        SECP256K1, EllipticCurvePrivateKey, derive_private_key,
+    )
+    from cryptography.hazmat.backends import default_backend
+    priv_int = int.from_bytes(privkey, "big")
+    key = derive_private_key(priv_int, SECP256K1(), default_backend())
+    pub = key.public_key().public_bytes(
+        encoding=__import__("cryptography").hazmat.primitives.serialization.Encoding.X962,
+        format=(__import__("cryptography").hazmat.primitives.serialization.PublicFormat.CompressedPoint
+                if compressed else
+                __import__("cryptography").hazmat.primitives.serialization.PublicFormat.UncompressedPoint),
+    )
+    return pub
+
+
+def _sign_hash(privkey: bytes, msg_hash: bytes) -> bytes:
+    """Return DER-encoded ECDSA signature (secp256k1)."""
+    try:
+        import coincurve
+        sig = coincurve.PrivateKey(privkey).sign(msg_hash, hasher=None)
+        return sig  # coincurve returns DER by default
+    except ImportError:
+        pass
+    from cryptography.hazmat.primitives.asymmetric.ec import (
+        SECP256K1, ECDSA, derive_private_key,
+    )
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+    from cryptography.hazmat.primitives.hashes import SHA256
+    from cryptography.hazmat.backends import default_backend
+    priv_int = int.from_bytes(privkey, "big")
+    key = derive_private_key(priv_int, SECP256K1(), default_backend())
+    # cryptography signs with hashing; we pass pre-hashed and use Prehashed
+    from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+    from cryptography.hazmat.primitives.asymmetric import ec
+    sig_bytes = key.sign(msg_hash, ec.ECDSA(__import__("cryptography").hazmat.primitives.hashes.Prehashed()))
+    return sig_bytes
+
+
+def _build_btc_tx(
+    utxo_txid: str,
+    utxo_vout: int,
+    utxo_satoshis: int,
+    op_return_data: bytes,
+    privkey: bytes,
+    compressed: bool,
+    fee_sat: int = 2000,
+) -> str:
+    """Build and sign a BTC P2PKH → OP_RETURN + change transaction.
+
+    Returns the signed raw transaction as a hex string.
+    """
+    pubkey = _privkey_to_pubkey(privkey, compressed)
+    locking_script = _p2pkh_script(pubkey)
+    change_sat = utxo_satoshis - fee_sat
+    op_return_script = _build_op_return_script(op_return_data)
+
+    def _serialize_tx(script_sig: bytes) -> bytes:
+        # version
+        tx = struct.pack("<I", 1)
+        # inputs
+        tx += _varint(1)
+        tx += bytes.fromhex(utxo_txid)[::-1]   # txid LE
+        tx += struct.pack("<I", utxo_vout)
+        tx += _varint(len(script_sig)) + script_sig
+        tx += b"\xff\xff\xff\xff"               # sequence
+        # outputs
+        n_outputs = 2 if change_sat > 546 else 1
+        tx += _varint(n_outputs)
+        # OP_RETURN (0 satoshis)
+        tx += struct.pack("<Q", 0)
+        tx += _varint(len(op_return_script)) + op_return_script
+        # change (P2PKH back to sender)
+        if change_sat > 546:
+            tx += struct.pack("<Q", change_sat)
+            tx += _varint(len(locking_script)) + locking_script
+        # locktime
+        tx += b"\x00\x00\x00\x00"
+        return tx
+
+    # Sighash preimage: serialize with locking_script as scriptSig, append SIGHASH_ALL
+    preimage = _serialize_tx(locking_script) + struct.pack("<I", 1)
+    sighash = _hash256(preimage)
+    der_sig = _sign_hash(privkey, sighash)
+    script_sig = (
+        bytes([len(der_sig) + 1]) + der_sig + b"\x01"  # sig + SIGHASH_ALL
+        + bytes([len(pubkey)]) + pubkey
+    )
+    return _serialize_tx(script_sig).hex()
 
 
 # ---------------------------------------------------------------------------
@@ -155,54 +302,149 @@ class AnchorResult:
 class BTCBroadcaster:
     """Broadcast OP_RETURN transactions to Bitcoin via HTTP APIs.
 
-    Supports Blockstream.info and Mempool.space API formats.
+    Supports Blockstream.info and Mempool.space Esplora-compatible API formats.
 
-    NOTE: This class builds a *minimal* raw transaction carrying a single
-    OP_RETURN output.  It requires a funded UTXO passed at broadcast time.
-    For production use, integrate with a proper BTC wallet library.
+    When a WIF signing key is provided, ``broadcast()`` fetches UTXOs from the
+    Esplora API, builds a P2PKH → OP_RETURN + change transaction, signs it
+    with secp256k1 (via coincurve or cryptography), and broadcasts it — all
+    without requiring external Bitcoin libraries.
+
+    When no WIF is provided, ``broadcast()`` returns an error and callers must
+    construct the transaction externally and use ``broadcast_signed()``.
 
     Args:
-        api_url:    Base URL of the broadcast API.  Must support
-                    ``POST /tx`` accepting a raw hex transaction.
-        network:    ``"mainnet"`` or ``"testnet"`` (used for logging only).
+        api_url:    Base URL of an Esplora-compatible API.  Defaults to
+                    ``"https://blockstream.info/api"`` (mainnet).
+        wif:        BTC private key in WIF format.  Required for ``broadcast()``.
+        fee_sat:    Miner fee in satoshis (default 2000).
+        network:    ``"mainnet"`` or ``"testnet"`` (for logging only).
+
+    Example (with key)::
+
+        broadcaster = BTCBroadcaster(wif=os.environ["BTC_WIF"])
+        result = await broadcaster.broadcast(op_return_data)
+
+    Example (pre-signed)::
+
+        broadcaster = BTCBroadcaster()
+        result = await broadcaster.broadcast_signed(signed_raw_hex)
     """
 
     def __init__(
         self,
         api_url: str = "https://blockstream.info/api",
+        wif: str | None = None,
+        fee_sat: int = 2000,
         network: str = "mainnet",
     ) -> None:
         self._api_url = api_url.rstrip("/")
+        self._fee_sat = fee_sat
         self._network = network
+        self._privkey: bytes | None = None
+        self._compressed: bool = True
+        if wif:
+            try:
+                self._privkey, self._compressed = _decode_wif(wif)
+            except Exception as exc:
+                raise ValueError("invalid key material") from exc
+
+    async def _fetch_utxos(self, address: str) -> list[dict]:
+        """Fetch confirmed UTXOs for *address* from Esplora API."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{self._api_url}/address/{address}/utxo")
+            resp.raise_for_status()
+            return [u for u in resp.json() if u.get("status", {}).get("confirmed", False)]
+
+    def _derive_address(self) -> str:
+        """Derive P2PKH Bitcoin address from the configured WIF key."""
+        if self._privkey is None:
+            raise ValueError("No WIF configured")
+        pubkey = _privkey_to_pubkey(self._privkey, self._compressed)
+        h = _hash160(pubkey)
+        # Version byte: 0x00 mainnet, 0x6F testnet
+        version = b"\x00" if self._network == "mainnet" else b"\x6F"
+        payload = version + h
+        checksum = _hash256(payload)[:4]
+        raw = payload + checksum
+        # Base58 encode
+        ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        n = int.from_bytes(raw, "big")
+        result = ""
+        while n:
+            n, r = divmod(n, 58)
+            result = ALPHABET[r] + result
+        return "1" * (len(raw) - len(raw.lstrip(b"\x00"))) + result
 
     async def broadcast(self, op_return_data: bytes) -> AnchorResult:
-        """Broadcast *op_return_data* as an OP_RETURN transaction.
+        """Build, sign and broadcast an OP_RETURN transaction to Bitcoin.
 
-        This is a stub implementation that constructs the OP_RETURN script and
-        posts it to the API.  A full implementation requires a funded UTXO and
-        signing infrastructure.
+        Requires a WIF key configured at construction time.  Fetches UTXOs
+        from the Esplora API, selects the largest confirmed UTXO, constructs
+        a P2PKH → OP_RETURN + change transaction, signs it with secp256k1,
+        and broadcasts via ``POST /tx``.
 
-        Returns an AnchorResult with ``success=False`` and a descriptive error
-        when no signing key is configured (e.g., in testing contexts).
+        Args:
+            op_return_data: Raw bytes to embed in OP_RETURN (max 80 bytes).
+
+        Returns:
+            AnchorResult with txid on success.
         """
-        script = _build_op_return_script(op_return_data)
-        # In a full implementation, we would sign the tx with a funded UTXO here.
-        # Returning a stub result to keep this dependency-free in tests.
-        return AnchorResult(
-            chain="btc",
-            txid=None,
-            success=False,
-            error=(
-                "BTCBroadcaster.broadcast() is a stub — "
-                "provide a signing key and funded UTXO for production use"
-            ),
-        )
+        if self._privkey is None:
+            return AnchorResult(
+                chain="btc",
+                success=False,
+                error=(
+                    "BTCBroadcaster requires a WIF key for broadcast(). "
+                    "Pass wif=... at construction, or use broadcast_signed() "
+                    "with a pre-signed raw transaction."
+                ),
+            )
+        if len(op_return_data) > 80:
+            return AnchorResult(
+                chain="btc",
+                success=False,
+                error=f"OP_RETURN data too large: {len(op_return_data)} bytes (max 80)",
+            )
+        try:
+            address = self._derive_address()
+            utxos = await self._fetch_utxos(address)
+        except Exception as exc:
+            return AnchorResult(chain="btc", success=False, error=f"UTXO fetch failed: {exc}")
 
-    async def broadcast_signed(
-        self,
-        raw_tx_hex: str,
-    ) -> AnchorResult:
-        """Broadcast a fully-signed raw transaction hex string.
+        if not utxos:
+            return AnchorResult(
+                chain="btc",
+                success=False,
+                error=f"No confirmed UTXOs for {address}",
+            )
+
+        # Select largest UTXO
+        utxo = max(utxos, key=lambda u: u.get("value", 0))
+        utxo_sat: int = utxo["value"]
+        if utxo_sat <= self._fee_sat:
+            return AnchorResult(
+                chain="btc",
+                success=False,
+                error=f"UTXO value {utxo_sat} sat too small for fee {self._fee_sat} sat",
+            )
+
+        try:
+            raw_hex = _build_btc_tx(
+                utxo_txid=utxo["txid"],
+                utxo_vout=utxo["vout"],
+                utxo_satoshis=utxo_sat,
+                op_return_data=op_return_data,
+                privkey=self._privkey,
+                compressed=self._compressed,
+                fee_sat=self._fee_sat,
+            )
+        except Exception as exc:
+            return AnchorResult(chain="btc", success=False, error=f"Tx build failed: {exc}")
+
+        return await self.broadcast_signed(raw_hex)
+
+    async def broadcast_signed(self, raw_tx_hex: str) -> AnchorResult:
+        """Broadcast a fully-signed raw transaction hex string via Esplora API.
 
         Args:
             raw_tx_hex: Signed raw transaction as a hex string.
@@ -214,8 +456,7 @@ class BTCBroadcaster:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(f"{self._api_url}/tx", content=raw_tx_hex)
                 if resp.status_code == 200:
-                    txid = resp.text.strip()
-                    return AnchorResult(chain="btc", txid=txid, success=True)
+                    return AnchorResult(chain="btc", txid=resp.text.strip(), success=True)
                 return AnchorResult(
                     chain="btc",
                     success=False,
