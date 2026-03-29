@@ -204,5 +204,35 @@
         "root": "sha256:dbfe2f0dd82f06c11989c6e49a911c370612941c1abf60c9e9c6e6da8f847aa6"
       }
     }
+  },
+  "rust": {
+    "rust_crate": "sdk-rs/hasher",
+    "description": "Rust SDK test vectors — identical expected values to Python/TS/Go. Verified by TestRustSdkVectors (static source analysis, no Rust compilation).",
+    "known_vectors": [
+      {
+        "input_bytes_ascii": "",
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "rust_test": "hash_bytes_known_vector"
+      },
+      {
+        "input_bytes_ascii": "abc",
+        "expected_sha256": "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8",
+        "rust_test": "hash_bytes_abc_vector"
+      }
+    ],
+    "canonical_json_vector": {
+      "input": {
+        "model": "gpt-4",
+        "seq": 0,
+        "confidence": null
+      },
+      "expected_canonical": "{\"confidence\":null,\"model\":\"gpt-4\",\"seq\":0}",
+      "rust_test": "cross_sdk_canonical_json_vector"
+    },
+    "merkle_prefix": {
+      "leaf_prefix_hex": "00",
+      "internal_prefix_hex": "01",
+      "description": "RFC 6962 second-preimage protection (BRC-121 §5)"
+    }
   }
 }

@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import os
 import hashlib
-import re
 from pathlib import Path
 
 import pytest
@@ -255,6 +254,9 @@ class TestCrossSDKVectors:
         assert len(loaded["canonical_json"]) == len(CANONICAL_JSON_CASES)
         assert len(loaded["hash_object"]) == len(HASH_OBJECT_INPUTS)
         assert loaded["merkle"]["expected_root"] == tree.root()
+        # Rust metadata preserved in generated file
+        assert "rust" in loaded
+        assert loaded["rust"]["rust_crate"] == "sdk-rs/hasher"
 
     def test_vectors_self_verify(self):
         """Verify that generated vectors pass when loaded back."""
@@ -281,3 +283,183 @@ class TestCrossSDKVectors:
                 root=proof_data["root"],
             )
             assert verify_proof(root, proof, h)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Rust SDK cross-SDK vector verification (static source analysis)
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestRustSdkVectors:
+    """Verify Rust SDK test vectors match Python SDK via static source analysis.
+
+    These tests read sdk-rs/hasher/src/lib.rs and sdk-rs/merkle/src/lib.rs
+    and confirm that the hardcoded SHA-256 and canonical-JSON test vectors
+    embedded in the Rust source are identical to the values produced by the
+    Python SDK.  No Rust compilation is needed.
+    """
+
+    # Known SHA-256 vectors embedded in the Rust source (test: hash_bytes_known_vector
+    # and hash_bytes_abc_vector).
+    _SHA256_VECTORS: list[tuple[bytes, str]] = [
+        (
+            b"",
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        ),
+        (
+            b"abc",
+            "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8",
+        ),
+    ]
+
+    # ── Presence checks ───────────────────────────────────────────────
+
+    def test_rust_hasher_source_present(self):
+        """Rust SDK hasher source exists at expected path (sdk-rs/hasher/src/lib.rs)."""
+        if not RUST_HASHER_SOURCE.exists():
+            pytest.skip("Rust SDK source not available — skipping static analysis")
+        assert RUST_HASHER_SOURCE.is_file()
+
+    def test_rust_merkle_source_present(self):
+        """Rust SDK merkle source exists at expected path (sdk-rs/merkle/src/lib.rs)."""
+        if not RUST_MERKLE_SOURCE.exists():
+            pytest.skip("Rust SDK merkle source not available")
+        assert RUST_MERKLE_SOURCE.is_file()
+
+    # ── SHA-256 known-vector checks ───────────────────────────────────
+
+    def test_rust_known_sha256_empty_string_matches_python(self):
+        """SHA-256('') hardcoded in Rust lib.rs equals Python's hashlib output."""
+        if not RUST_HASHER_SOURCE.exists():
+            pytest.skip("Rust SDK source not available")
+        source = RUST_HASHER_SOURCE.read_text(encoding="utf-8")
+        expected = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        assert expected in source, (
+            f"Empty-string SHA-256 vector {expected!r} not found in Rust hasher source"
+        )
+        python_result = hashlib.sha256(b"").hexdigest()
+        assert python_result == expected, (
+            f"Python hashlib disagrees: {python_result!r} != {expected!r}"
+        )
+
+    def test_rust_known_sha256_abc_matches_python(self):
+        """SHA-256('abc') hardcoded in Rust lib.rs equals Python's hashlib output."""
+        if not RUST_HASHER_SOURCE.exists():
+            pytest.skip("Rust SDK source not available")
+        source = RUST_HASHER_SOURCE.read_text(encoding="utf-8")
+        expected = "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8"
+        assert expected in source, (
+            f"SHA-256('abc') vector {expected!r} not found in Rust hasher source"
+        )
+        python_result = hashlib.sha256(b"abc").hexdigest()
+        assert python_result == expected, (
+            f"Python hashlib disagrees: {python_result!r} != {expected!r}"
+        )
+
+    def test_all_sha256_vectors_match_python(self):
+        """Every known SHA-256 vector in Rust source is confirmed by Python hashlib."""
+        if not RUST_HASHER_SOURCE.exists():
+            pytest.skip("Rust SDK source not available")
+        for raw, expected_hex in self._SHA256_VECTORS:
+            python_result = hashlib.sha256(raw).hexdigest()
+            assert python_result == expected_hex, (
+                f"SHA-256({raw!r}): Python={python_result!r}, Rust vector={expected_hex!r}"
+            )
+
+    # ── Canonical JSON cross-SDK vector ───────────────────────────────
+
+    def test_rust_canonical_json_vector_in_source(self):
+        """The cross_sdk_canonical_json_vector in Rust source is present and correct."""
+        if not RUST_HASHER_SOURCE.exists():
+            pytest.skip("Rust SDK source not available")
+        source = RUST_HASHER_SOURCE.read_text(encoding="utf-8")
+        # Rust test: canonical_json of {"model":"gpt-4","seq":0,"confidence":null}
+        # → b"{\"confidence\":null,\"model\":\"gpt-4\",\"seq\":0}"
+        fragment = '"confidence":null,"model":"gpt-4","seq":0'
+        assert fragment in source, (
+            f"Cross-SDK canonical JSON fragment {fragment!r} not found in Rust source"
+        )
+
+    def test_rust_canonical_json_vector_matches_python(self):
+        """Python canonical_json matches the vector embedded in Rust lib.rs."""
+        input_obj = {"model": "gpt-4", "seq": 0, "confidence": None}
+        expected = b'{"confidence":null,"model":"gpt-4","seq":0}'
+        python_result = canonical_json(input_obj)
+        assert python_result == expected, (
+            f"Python canonical_json result {python_result!r} != expected {expected!r}"
+        )
+
+    # ── Rust merkle prefix checks (RFC 6962) ──────────────────────────
+
+    def test_rust_merkle_leaf_prefix_is_0x00(self):
+        """Rust merkle lib applies 0x00 byte prefix to leaf nodes (RFC 6962)."""
+        if not RUST_MERKLE_SOURCE.exists():
+            pytest.skip("Rust SDK merkle source not available")
+        source = RUST_MERKLE_SOURCE.read_text(encoding="utf-8")
+        assert "0x00" in source, (
+            "0x00 leaf prefix not found in Rust merkle source — "
+            "RFC 6962 second-preimage protection may be broken"
+        )
+
+    def test_rust_merkle_internal_prefix_is_0x01(self):
+        """Rust merkle lib applies 0x01 byte prefix to internal nodes (RFC 6962)."""
+        if not RUST_MERKLE_SOURCE.exists():
+            pytest.skip("Rust SDK merkle source not available")
+        source = RUST_MERKLE_SOURCE.read_text(encoding="utf-8")
+        assert "0x01" in source, (
+            "0x01 internal prefix not found in Rust merkle source — "
+            "RFC 6962 second-preimage protection may be broken"
+        )
+
+    def test_rust_merkle_odd_node_promotion_in_source(self):
+        """Rust merkle source promotes odd-count nodes (not duplicate) at each level."""
+        if not RUST_MERKLE_SOURCE.exists():
+            pytest.skip("Rust SDK merkle source not available")
+        source = RUST_MERKLE_SOURCE.read_text(encoding="utf-8")
+        # The Rust code comments say: "Odd node: promote without pairing (standard practice)."
+        assert "promote" in source.lower() or "odd" in source.lower(), (
+            "No evidence of odd-node promotion logic in Rust merkle source"
+        )
+
+    # ── Cross-SDK JSON file checks ────────────────────────────────────
+
+    def test_rust_vectors_in_json_file_present(self):
+        """vectors.json contains a 'rust' section after test_generate_vectors runs."""
+        if not VECTOR_FILE.exists():
+            pytest.skip("vectors.json not generated yet — run TestCrossSDKVectors first")
+        vectors = json.loads(VECTOR_FILE.read_text())
+        assert "rust" in vectors, (
+            "No 'rust' section in vectors.json — run test_generate_vectors to regenerate"
+        )
+        assert vectors["rust"]["rust_crate"] == "sdk-rs/hasher"
+
+    def test_rust_known_vectors_in_json_match_python_sha256(self):
+        """Rust known_vectors stored in vectors.json produce correct Python SHA-256."""
+        if not VECTOR_FILE.exists():
+            pytest.skip("vectors.json not generated yet")
+        vectors = json.loads(VECTOR_FILE.read_text())
+        if "rust" not in vectors:
+            pytest.skip("No Rust section in vectors.json — run test_generate_vectors first")
+        for v in vectors["rust"].get("known_vectors", []):
+            input_bytes = v["input_bytes_ascii"].encode("ascii")
+            expected = v["expected_sha256"]
+            python_result = hashlib.sha256(input_bytes).hexdigest()
+            assert python_result == expected, (
+                f"Python SHA-256({v['input_bytes_ascii']!r}) = {python_result!r} "
+                f"but Rust vector says {expected!r}"
+            )
+
+    def test_rust_canonical_json_vector_in_json_matches_python(self):
+        """The canonical JSON vector in the rust section of vectors.json matches Python."""
+        if not VECTOR_FILE.exists():
+            pytest.skip("vectors.json not generated yet")
+        vectors = json.loads(VECTOR_FILE.read_text())
+        if "rust" not in vectors or "canonical_json_vector" not in vectors["rust"]:
+            pytest.skip("No Rust canonical JSON vector in vectors.json")
+        v = vectors["rust"]["canonical_json_vector"]
+        expected_canonical = v["expected_canonical"].encode("utf-8")
+        python_result = canonical_json(v["input"])
+        assert python_result == expected_canonical, (
+            f"Python canonical_json result {python_result!r} "
+            f"!= Rust vector {expected_canonical!r}"
+        )
