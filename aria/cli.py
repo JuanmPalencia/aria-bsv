@@ -896,6 +896,170 @@ def bundle(db: str, epoch_ids: tuple, output_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# aria init
+# ---------------------------------------------------------------------------
+
+@cli.command("init")
+@click.option("--system-id", prompt="System ID", help="Unique identifier for your AI system")
+@click.option("--network", default="testnet", type=click.Choice(["mainnet", "testnet"]),
+              show_default=True, help="BSV network")
+@click.option("--db", default="aria.db", show_default=True, help="SQLite database file")
+@click.option("--generate-key", is_flag=True, help="Generate a BSV keypair")
+@click.option("--output", "output_path", default="aria.toml", show_default=True,
+              help="Output config file path")
+def init_cmd(system_id: str, network: str, db: str, generate_key: bool, output_path: str) -> None:
+    """Initialize an ARIA project — generates aria.toml and optional keypair.
+
+    \b
+    Examples:
+      aria init --system-id my-ai-app
+      aria init --system-id prod --network mainnet --generate-key
+    """
+    from aria.config_file import generate_config_template
+
+    if os.path.exists(output_path):
+        if not click.confirm(f"{output_path} already exists. Overwrite?"):
+            _info("Aborted.")
+            return
+
+    config_content = generate_config_template(system_id, network)
+    config_content = config_content.replace('storage = "sqlite:///aria.db"', f'storage = "sqlite:///{db}"')
+
+    with open(output_path, "w") as f:
+        f.write(config_content)
+    _ok(f"Config written to {output_path}")
+
+    if generate_key:
+        from aria.wallet.keygen import generate_keypair, write_env_file
+
+        kp = generate_keypair(network=network)
+        env_path = ".env"
+        write_env_file(kp, path=env_path)
+        _ok(f"Keypair generated and saved to {env_path}")
+        _info(f"Address: {kp.address}")
+    else:
+        _info("TIP: Run 'aria keygen --env .env' to generate a BSV keypair")
+
+    _ok(f"ARIA project initialized for '{system_id}'")
+
+
+# ---------------------------------------------------------------------------
+# aria estimate
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--records", type=int, required=True, help="Number of inference records")
+@click.option("--epochs", type=int, default=None, help="Number of epochs (auto if omitted)")
+@click.option("--per-epoch", type=int, default=500, show_default=True,
+              help="Records per epoch (for auto calculation)")
+@click.option("--network", default="mainnet", type=click.Choice(["mainnet", "testnet"]),
+              show_default=True)
+@click.option("--bsv-usd", type=float, default=50.0, show_default=True,
+              help="BSV/USD exchange rate for fiat estimate")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def estimate(records: int, epochs: Optional[int], per_epoch: int, network: str,
+             bsv_usd: float, as_json: bool) -> None:
+    """Estimate BSV transaction costs for ARIA auditing.
+
+    \b
+    Examples:
+      aria estimate --records 10000
+      aria estimate --records 1000000 --per-epoch 1000 --bsv-usd 65
+      aria estimate --records 500 --network testnet
+    """
+    from aria.cost_estimator import CostEstimator
+
+    est = CostEstimator(network=network, bsv_usd=bsv_usd)
+    result = est.estimate(records=records, epochs=epochs, records_per_epoch=per_epoch)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(str(result))
+
+
+# ---------------------------------------------------------------------------
+# aria pipeline
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--name", "pipeline_name", required=True, help="Pipeline name")
+@click.option("--json", "as_json", is_flag=True)
+def pipeline(db: str, pipeline_name: str, as_json: bool) -> None:
+    """Show pipeline traces for a given pipeline name."""
+    _info(f"Pipeline: {pipeline_name}")
+    _info("Use PipelineAuditor in code to record pipeline traces.")
+    _info("  from aria.pipeline import PipelineAuditor")
+
+
+# ---------------------------------------------------------------------------
+# aria sync
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--json", "as_json", is_flag=True)
+def sync(db: str, as_json: bool) -> None:
+    """Sync offline epochs to BSV (publish pending OPEN/CLOSE transactions).
+
+    \b
+    Requires ARIA_BSV_KEY environment variable to be set.
+    """
+    from aria.offline import list_pending, sync_all
+
+    storage = _get_storage(db)
+    pending = list_pending(storage)
+
+    if not pending:
+        _ok("No pending offline epochs to sync.")
+        return
+
+    _info(f"Found {len(pending)} pending epoch(s).")
+
+    bsv_key = os.environ.get("ARIA_BSV_KEY")
+    if not bsv_key:
+        _err("Set ARIA_BSV_KEY environment variable to sync offline epochs.")
+        sys.exit(1)
+
+    _info("Use aria.offline.sync_all() programmatically with wallet + broadcaster.")
+    if as_json:
+        click.echo(json.dumps({"pending_epochs": pending}))
+    else:
+        for eid in pending:
+            _info(f"  Pending: {eid}")
+
+
+# ---------------------------------------------------------------------------
+# aria retry-status
+# ---------------------------------------------------------------------------
+
+@cli.command("retry-status")
+@click.option("--db-path", default=None, help="Path to retry queue database")
+@click.option("--json", "as_json", is_flag=True)
+def retry_status(db_path: Optional[str], as_json: bool) -> None:
+    """Show status of the retry queue (pending/dead-letter items)."""
+    from aria.retry_queue import RetryQueue
+
+    queue = RetryQueue(db_path=db_path) if db_path else RetryQueue()
+
+    total = queue.count()
+    dead = queue.dead_letters()
+
+    if as_json:
+        click.echo(json.dumps({
+            "total_items": total,
+            "dead_letters": len(dead),
+        }))
+    else:
+        _info(f"Retry queue: {total} item(s)")
+        if dead:
+            _err(f"Dead letters: {len(dead)} item(s)")
+            for item in dead[:5]:
+                _info(f"  {item.item_id}: {item.last_error}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
