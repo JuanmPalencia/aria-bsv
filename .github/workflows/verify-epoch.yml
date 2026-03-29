@@ -1,0 +1,35 @@
+# Example workflow using ARIA BSV verify-epoch action
+name: "ARIA Epoch Verification"
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      epoch_id:
+        description: "Specific epoch ID to verify (optional)"
+        required: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify ARIA Epoch
+        uses: ./.github/actions/verify-epoch
+        with:
+          system-id: ${{ vars.ARIA_SYSTEM_ID }}
+          database: "aria.db"
+          arc-api-key: ${{ secrets.ARC_API_KEY }}
+          epoch-id: ${{ github.event.inputs.epoch_id || '' }}
+          fail-on-error: "true"
+
+      - name: Report Results
+        if: always()
+        run: |
+          echo "Verified: ${{ steps.verify.outputs.verified }}"
+          echo "Epoch: ${{ steps.verify.outputs.epoch-id }}"
+          echo "Merkle Root: ${{ steps.verify.outputs.merkle-root }}"
+          echo "Records: ${{ steps.verify.outputs.records-count }}"

@@ -1,0 +1,137 @@
+name: "ARIA BSV Verify Epoch"
+description: "Verify ARIA BSV epoch integrity and audit trail on-chain"
+author: "Juan Manuel Palencia Osorio"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  epoch-id:
+    description: "Epoch ID to verify. If not set, verifies the latest epoch."
+    required: false
+  system-id:
+    description: "System ID to verify against."
+    required: true
+  database:
+    description: "Path to the ARIA SQLite database."
+    required: false
+    default: "aria.db"
+  arc-url:
+    description: "ARC API URL for BSV transaction lookup."
+    required: false
+    default: "https://api.taal.com/arc/v1"
+  arc-api-key:
+    description: "ARC API key (pass as secret)."
+    required: false
+  python-version:
+    description: "Python version to use."
+    required: false
+    default: "3.11"
+  aria-version:
+    description: "aria-bsv PyPI version to install."
+    required: false
+    default: "latest"
+  fail-on-error:
+    description: "Fail the workflow if verification fails."
+    required: false
+    default: "true"
+
+outputs:
+  verified:
+    description: "Whether epoch verification succeeded (true/false)."
+    value: ${{ steps.verify.outputs.verified }}
+  epoch-id:
+    description: "The epoch ID that was verified."
+    value: ${{ steps.verify.outputs.epoch_id }}
+  merkle-root:
+    description: "Merkle root of the verified epoch."
+    value: ${{ steps.verify.outputs.merkle_root }}
+  records-count:
+    description: "Number of records in the verified epoch."
+    value: ${{ steps.verify.outputs.records_count }}
+  report:
+    description: "Full verification report as JSON."
+    value: ${{ steps.verify.outputs.report }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install aria-bsv
+      shell: bash
+      run: |
+        if [ "${{ inputs.aria-version }}" = "latest" ]; then
+          pip install aria-bsv
+        else
+          pip install "aria-bsv==${{ inputs.aria-version }}"
+        fi
+
+    - name: Verify epoch
+      id: verify
+      shell: bash
+      env:
+        ARIA_SYSTEM_ID: ${{ inputs.system-id }}
+        ARIA_DB: ${{ inputs.database }}
+        ARIA_ARC_URL: ${{ inputs.arc-url }}
+        ARIA_ARC_KEY: ${{ inputs.arc-api-key }}
+      run: |
+        set -euo pipefail
+
+        EPOCH_ARG=""
+        if [ -n "${{ inputs.epoch-id }}" ]; then
+          EPOCH_ARG="${{ inputs.epoch-id }}"
+        fi
+
+        RESULT=$(python -c "
+        import json, sys
+        from aria.verify import verify_epoch
+        from aria.storage.sqlite import SQLiteStorage
+        import os
+
+        db = os.environ.get('ARIA_DB', 'aria.db')
+        storage = SQLiteStorage(dsn=f'sqlite:///{db}')
+        system_id = os.environ['ARIA_SYSTEM_ID']
+
+        epoch_id = '$EPOCH_ARG' or None
+        if epoch_id is None:
+            epochs = storage.list_epochs(system_id=system_id, limit=1)
+            if not epochs:
+                print(json.dumps({'verified': False, 'error': 'no epochs found'}))
+                sys.exit(1)
+            epoch_id = epochs[0].epoch_id
+
+        try:
+            result = verify_epoch(epoch_id, storage)
+            report = {
+                'verified': result.valid,
+                'epoch_id': epoch_id,
+                'merkle_root': result.merkle_root or '',
+                'records_count': result.records_count,
+                'errors': result.errors,
+            }
+            print(json.dumps(report))
+        except Exception as e:
+            print(json.dumps({'verified': False, 'error': str(e)}))
+            sys.exit(1)
+        ")
+
+        echo "report=${RESULT}" >> "$GITHUB_OUTPUT"
+
+        VERIFIED=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin).get('verified', False))")
+        EPOCH_ID=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin).get('epoch_id', ''))")
+        MERKLE_ROOT=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin).get('merkle_root', ''))")
+        RECORDS_COUNT=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin).get('records_count', 0))")
+
+        echo "verified=${VERIFIED}" >> "$GITHUB_OUTPUT"
+        echo "epoch_id=${EPOCH_ID}" >> "$GITHUB_OUTPUT"
+        echo "merkle_root=${MERKLE_ROOT}" >> "$GITHUB_OUTPUT"
+        echo "records_count=${RECORDS_COUNT}" >> "$GITHUB_OUTPUT"
+
+        if [ "${{ inputs.fail-on-error }}" = "true" ] && [ "${VERIFIED}" != "True" ]; then
+          echo "::error::Epoch verification failed"
+          exit 1
+        fi
