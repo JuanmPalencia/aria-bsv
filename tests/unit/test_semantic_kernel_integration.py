@@ -141,7 +141,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         next_fn.assert_called_once_with(ctx)
         auditor.record.assert_called_once()
 
@@ -154,7 +154,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         aria.record.assert_called_once()
         kwargs = aria.record.call_args[1]
         assert "model_id" in kwargs
@@ -168,7 +168,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         args = auditor.record.call_args[0]
         assert args[0] == "SearchPlugin:search"
 
@@ -181,7 +181,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         args = auditor.record.call_args[0]
         assert args[0] == "my-kernel"
 
@@ -196,7 +196,7 @@ class TestARIAKernelMiddlewareFilter:
             await middleware.on_function_invocation(ctx, next_fn)
 
         # Must not raise
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_function_none_defaults_to_unknown(self):
         auditor = MagicMock()
@@ -210,7 +210,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         args = auditor.record.call_args[0]
         assert args[0] == "unknown"
 
@@ -223,7 +223,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         args = auditor.record.call_args[0]
         input_data = args[1]
         assert input_data.get("input") == "world"
@@ -237,7 +237,7 @@ class TestARIAKernelMiddlewareFilter:
         async def _run():
             await middleware.on_function_invocation(ctx, next_fn)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         kwargs = auditor.record.call_args[1]
         assert kwargs["metadata"]["function"] == "P:f"
 
@@ -276,6 +276,7 @@ class TestARIASemanticKernelInit:
         sk_mod = _make_sk_module()
         mock_kernel = _make_mock_kernel()
         mock_kernel.some_setting = "sk_value"
+        sk_mod.Kernel.side_effect = None
         sk_mod.Kernel.return_value = mock_kernel
 
         with patch.dict(sys.modules, {"semantic_kernel": sk_mod}):
@@ -289,6 +290,7 @@ class TestARIASemanticKernelInit:
         sk_mod = _make_sk_module()
         mock_kernel = _make_mock_kernel()
         mock_kernel.invoke = AsyncMock(return_value=_make_kernel_result("sk-result"))
+        sk_mod.Kernel.side_effect = None
         sk_mod.Kernel.return_value = mock_kernel
 
         with patch.dict(sys.modules, {"semantic_kernel": sk_mod}):
@@ -300,7 +302,7 @@ class TestARIASemanticKernelInit:
             async def _run():
                 return await wrapper.invoke("MyPlugin", "my_fn", input="test")
 
-            result = asyncio.get_event_loop().run_until_complete(_run())
+            result = asyncio.run(_run())
             assert result.value == "sk-result"
             mock_kernel.invoke.assert_called_once_with("MyPlugin", "my_fn", input="test")
 

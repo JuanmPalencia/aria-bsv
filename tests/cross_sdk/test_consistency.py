@@ -190,7 +190,7 @@ class TestCrossSDKVectors:
                     {
                         "input_bytes_ascii": "abc",
                         "expected_sha256": (
-                            "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8"
+                            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
                         ),
                         "rust_test": "hash_bytes_abc_vector",
                     },
@@ -308,7 +308,7 @@ class TestRustSdkVectors:
         ),
         (
             b"abc",
-            "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
         ),
     ]
 
@@ -347,7 +347,7 @@ class TestRustSdkVectors:
         if not RUST_HASHER_SOURCE.exists():
             pytest.skip("Rust SDK source not available")
         source = RUST_HASHER_SOURCE.read_text(encoding="utf-8")
-        expected = "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8"
+        expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         assert expected in source, (
             f"SHA-256('abc') vector {expected!r} not found in Rust hasher source"
         )

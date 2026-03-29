@@ -74,11 +74,11 @@ class BlockHeader:
     nonce: int
 
     @classmethod
-    def from_hex(cls, hex_header: str) -> "BlockHeader":
+    def from_hex(cls, hex_header: "str | bytes") -> "BlockHeader":
         """Parse a hex-encoded 80-byte block header.
 
         Args:
-            hex_header: 160 hex characters (80 bytes).
+            hex_header: 160 hex characters (80 bytes), or raw bytes of length 80.
 
         Returns:
             A :class:`BlockHeader` instance.
@@ -86,7 +86,10 @@ class BlockHeader:
         Raises:
             SPVError: If the input is not exactly 80 bytes.
         """
-        raw = bytes.fromhex(hex_header)
+        try:
+            raw = hex_header if isinstance(hex_header, bytes) else bytes.fromhex(hex_header)
+        except ValueError as exc:
+            raise SPVError(f"Invalid hex header: {exc}") from exc
         if len(raw) != _HEADER_SIZE:
             raise SPVError(
                 f"Block header must be exactly 80 bytes, got {len(raw)}"

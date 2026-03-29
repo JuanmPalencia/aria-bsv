@@ -254,9 +254,9 @@ mod tests {
 
     #[test]
     fn hash_bytes_abc_vector() {
-        // SHA-256("abc") = ba7816bf...
+        // SHA-256("abc") = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
         let h = hash_bytes(b"abc");
-        assert_eq!(h, "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8");
+        assert_eq!(h, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     #[test]
