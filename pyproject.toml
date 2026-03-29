@@ -9,6 +9,9 @@ description = "Auditable Real-time Inference Architecture — BRC-121 reference 
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [
+    { name = "Juan Manuel Palencia Osorio" },
+]
 keywords = ["bsv", "blockchain", "ai", "audit", "inference", "accountability", "brc-121", "compliance", "eu-ai-act"]
 
 classifiers = [
@@ -31,6 +34,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.urls]
@@ -93,6 +97,13 @@ nostr = [
 ethereum = [
     "web3>=6.0",                # Ethereum RPC (optional — falls back to raw JSON-RPC)
 ]
+otel = [
+    "opentelemetry-api>=1.24",  # OpenTelemetry tracing and metrics
+    "opentelemetry-sdk>=1.24",
+]
+jupyter = [
+    "ipython>=8.0",             # Jupyter/IPython cell magic support
+]
 all = [
     "bsvlib>=0.4",
     "psycopg2-binary>=2.9",
@@ -107,6 +118,10 @@ all = [
     "transformers>=4.40",
     "mlflow>=2.0",
     "wandb>=0.17",
+    "opentelemetry-api>=1.24",
+    "opentelemetry-sdk>=1.24",
+    "ipython>=8.0",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 dev = [
     "click>=8.1",               # CLI (needed for test_cli.py)

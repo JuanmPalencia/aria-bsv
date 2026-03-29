@@ -4,10 +4,12 @@
 
 [![CI](https://github.com/JuanmPalencia/aria-bsv/actions/workflows/ci.yml/badge.svg)](https://github.com/JuanmPalencia/aria-bsv/actions)
 [![PyPI version](https://img.shields.io/pypi/v/aria-bsv.svg)](https://pypi.org/project/aria-bsv/)
-[![Tests](https://img.shields.io/badge/tests-1578%20passing-brightgreen.svg)](https://github.com/JuanmPalencia/aria-bsv/actions)
-[![License: Open BSV](https://img.shields.io/badge/License-Open%20BSV-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-2440%20passing-brightgreen.svg)](https://github.com/JuanmPalencia/aria-bsv/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![BRC-121](https://img.shields.io/badge/Standard-BRC--121-orange.svg)](https://github.com/bitcoin-sv/BRCs/pull/129)
 [![EU AI Act](https://img.shields.io/badge/EU%20AI%20Act-Art.%2012%20compliant-green.svg)](https://github.com/JuanmPalencia/aria-bsv)
+[![Typed](https://img.shields.io/badge/typed-PEP%20561-blue.svg)](https://peps.python.org/pep-0561/)
 
 ---
 
@@ -39,6 +41,19 @@ The [EU AI Act (Regulation 2024/1689)](docs/03-eu-ai-act-compliance.md) requires
 pip install aria-bsv
 ```
 
+### Zero-config mode (no blockchain knowledge needed)
+
+```python
+from aria.quick import ARIAQuick
+
+with ARIAQuick("my-ai-system") as aria:
+    aria.record("gpt-4", {"prompt": "hello"}, {"text": "hi"}, confidence=0.95)
+    summary = aria.close()
+    print(summary)
+```
+
+### Full control mode
+
 ```python
 from aria import InferenceAuditor, AuditConfig
 
@@ -58,6 +73,15 @@ result = auditor.verify(epoch_open_txid="a3f9...")
 print(result.valid)        # True
 print(result.tampered)     # False
 print(result.decided_at)   # "2026-03-22T14:32:01Z"
+```
+
+### CLI
+
+```bash
+aria init                          # interactive project setup
+aria selftest                      # verify SDK installation
+aria estimate --records 10000      # cost estimation
+aria export my-system --format pdf # compliance report
 ```
 
 That is everything the operator needs to do. Verification is available to anyone with the transaction ID.
@@ -123,6 +147,62 @@ Full mapping: [docs/03-eu-ai-act-compliance.md](docs/03-eu-ai-act-compliance.md)
 
 ---
 
+## Features
+
+### Core SDK
+- **Pre-Commitment Protocol** — epoch OPEN/CLOSE with Merkle trees, second-preimage protection (RFC 6962)
+- **Independent verification** — verify any decision from the blockchain without operator access
+- **Offline mode** — audit locally, sync to BSV later with `OfflineAuditor`
+- **Pipeline auditing** — trace multi-model inference chains with `PipelineAuditor`
+- **Retry queue** — persistent dead-letter queue with exponential backoff for failed broadcasts
+- **Cost estimator** — estimate BSV costs before going to production
+- **Declarative config** — `aria.toml` project files with environment variable overrides
+- **24+ CLI commands** — `aria init`, `aria selftest`, `aria estimate`, `aria export`, `aria sync`, and more
+
+### AI Framework Integrations (20+)
+OpenAI, Anthropic, Azure OpenAI, Google Gemini, Cohere, Mistral, Ollama, vLLM, HuggingFace Transformers, LangChain, LangGraph, LlamaIndex, AutoGen, CrewAI, SageMaker, Vertex AI, MLflow, Weights & Biases
+
+### Web Framework Integrations
+FastAPI middleware, Django middleware, Flask middleware
+
+### Regulatory & Compliance
+- **EU AI Act** compliance checker (Articles 9–14, 72)
+- **GDPR** PII masking, pseudonymisation, consent management
+- **Model cards** auto-generated from epoch data
+- **Regulatory export** — PDF/JSON reports for EU AI Act, NIST AI RMF, ISO 42001
+
+### Infrastructure
+- **Storage**: SQLite (zero-config), PostgreSQL (production)
+- **Events**: In-memory bus, Redis Pub/Sub for distributed deployments
+- **Metrics**: Prometheus, OpenTelemetry (spans + meters)
+- **SIEM**: JSON, CEF, LEEF export formats
+- **Multi-tenancy**: tenant isolation with SHA-256 API keys
+- **HSM**: hardware security module abstraction (LocalHSM, AWS KMS stub)
+- **Webhooks**: HMAC-SHA256 verified webhook receiver with FastAPI router
+- **Jupyter**: `%%aria` cell magic for notebook auditing
+
+### Multi-chain & Federation
+- **BSV** (primary) — ~$0.0001/epoch
+- **Ethereum** anchor (optional)
+- **Nostr** anchor (NIP-01)
+- **Federation hub** for multi-organization deployments
+
+### Developer Experience
+- **Zero blockchain knowledge required** — `ARIAQuick` context manager
+- **`aria init`** — interactive project scaffolding
+- **`aria selftest`** — verify installation
+- **GitHub Action** — reusable `verify-epoch` action for CI/CD
+- **Cross-SDK test vectors** — shared `vectors.json` for Go/TypeScript SDK compatibility
+- **Docker + Compose** — production-ready container stack
+- **Helm chart + Terraform** — Kubernetes & cloud deployment
+
+### Multi-language SDKs
+- **Python** (reference implementation) — full-featured
+- **TypeScript** (`sdk-ts/`) — hasher, merkle, auditor, verifier, contracts, overlay, streaming, SPV
+- **Go** (`sdk-go/`) — hasher, merkle, auditor
+
+---
+
 ## Production references
 
 | System | Domain | Status |
@@ -136,6 +216,15 @@ Full mapping: [docs/03-eu-ai-act-compliance.md](docs/03-eu-ai-act-compliance.md)
 
 | Document | Description |
 |----------|-------------|
+| [Whitepaper](docs/01-whitepaper.md) | Technical overview and motivation |
+| [Protocol spec](docs/02-protocol-spec.md) | BRC-121 protocol details |
+| [EU AI Act mapping](docs/03-eu-ai-act-compliance.md) | Article-by-article compliance mapping |
+| [Security model](docs/04-security-model.md) | Zero-trust security architecture |
+| [Threat model](docs/05-threat-model.md) | Attack vectors and mitigations |
+| [Performance](docs/06-performance.md) | Benchmarks and optimization |
+| [Getting started](docs/07-getting-started.md) | Installation and first steps |
+| [API reference](docs/08-api-reference.md) | Full Python API documentation |
+| [Implementation guide](docs/09-implementation-guide.md) | Guide for other language implementations |
 | [BRC-121 spec](https://github.com/bitcoin-sv/BRCs/pull/129) | Formal protocol specification |
 | [examples/minimal/](examples/minimal/) | Quickstart — 5 lines, zero config |
 | [examples/kairos/](examples/kairos/) | Production example — KAIROS CDS integration |
@@ -146,21 +235,31 @@ Full mapping: [docs/03-eu-ai-act-compliance.md](docs/03-eu-ai-act-compliance.md)
 
 ```
 aria-bsv/
-├── aria/                  # Python package
+├── aria/                  # Python SDK package
 │   ├── core/              # Cryptographic primitives (hasher, merkle, epoch, record)
-│   ├── wallet/            # BSV signing abstraction
-│   ├── broadcaster/       # ARC transaction broadcaster
-│   ├── storage/           # SQLite / PostgreSQL
-│   ├── integrations/      # FastAPI / Django / Flask
+│   ├── wallet/            # BSV signing abstraction (DirectWallet, BRC-100)
+│   ├── broadcaster/       # ARC transaction broadcaster with retry
+│   ├── storage/           # SQLite (zero-config) / PostgreSQL (production)
+│   ├── integrations/      # 20+ AI framework integrations
+│   ├── contracts/         # On-chain contract wrappers
+│   ├── telemetry/         # OpenTelemetry + Prometheus metrics
+│   ├── zk/                # Zero-knowledge proof layer (optional)
+│   ├── auditor.py         # Main public API
 │   ├── verify.py          # Independent verification engine
-│   └── auditor.py         # Main public API
+│   ├── pipeline.py        # Multi-model pipeline auditing
+│   ├── offline.py         # Offline mode with deferred sync
+│   ├── quick.py           # Zero-config entry point (ARIAQuick)
+│   ├── cli.py             # 24+ CLI commands
+│   └── ...                # 40+ modules total
+├── sdk-ts/                # TypeScript SDK
+├── sdk-go/                # Go SDK
 ├── portal/                # Verification web app (FastAPI + React)
 ├── registry/              # AI Systems Registry API
 ├── brc/0121.md            # BRC-121 specification
-├── docs/                  # Full documentation (9 documents)
-├── examples/              # kairos/, urban-vs/, minimal/
-├── tests/                 # unit/, integration/, fixtures/
-├── deploy/                # docker-compose, helm, k8s
+├── docs/                  # 9 technical documents
+├── examples/              # kairos/, minimal/
+├── tests/                 # 2440 tests (unit, chaos, perf, property, cross-sdk)
+├── deploy/                # Docker, Helm, Terraform, Grafana, Prometheus
 └── paper/                 # arXiv preprint
 ```
 
@@ -178,9 +277,33 @@ To report a security vulnerability: see [SECURITY.md](SECURITY.md)
 
 ---
 
+## Installation
+
+```bash
+# Core SDK (SQLite storage, no blockchain)
+pip install aria-bsv
+
+# With BSV anchoring
+pip install aria-bsv[bsv]
+
+# With CLI
+pip install aria-bsv[cli]
+
+# With AI framework integrations
+pip install aria-bsv[openai]           # OpenAI
+pip install aria-bsv[anthropic]        # Anthropic
+pip install aria-bsv[huggingface]      # HuggingFace
+pip install aria-bsv[langchain]        # LangChain
+
+# Full installation (all optional dependencies)
+pip install aria-bsv[all]
+```
+
+---
+
 ## Status
 
-ARIA v0.4.0 — **all phases complete**. 1578 tests passing. Mainnet-verified.
+ARIA v0.5.0 — **all phases complete**. 2440 tests passing. Mainnet-verified.
 
 BRC-121 PR open: [bitcoin-sv/BRCs#129](https://github.com/bitcoin-sv/BRCs/pull/129)
 
@@ -188,12 +311,14 @@ BRC-121 PR open: [bitcoin-sv/BRCs#129](https://github.com/bitcoin-sv/BRCs/pull/1
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and contribution guidelines.
 
 This project proposes [BRC-121](brc/0121.md) as an open standard to the BSV ecosystem. Implementations in other languages that follow the spec are welcome and will be listed here.
+
+Please note that this project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
 ## License
 
-[Open BSV License](LICENSE) — consistent with the BSV ecosystem.
+[MIT License](LICENSE)
