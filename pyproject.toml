@@ -104,6 +104,21 @@ otel = [
 jupyter = [
     "ipython>=8.0",             # Jupyter/IPython cell magic support
 ]
+litellm = [
+    "litellm>=1.0",             # Unified LLM interface (100+ providers)
+]
+dspy = [
+    "dspy-ai>=2.0",             # Stanford DSPy programmatic LLM prompting
+]
+instructor = [
+    "instructor>=1.0",          # Structured outputs with Pydantic models
+]
+smolagents = [
+    "smolagents>=1.0",          # HuggingFace SmolAgents lightweight agent framework
+]
+semantic_kernel = [
+    "semantic-kernel>=1.0",     # Microsoft Semantic Kernel AI SDK
+]
 all = [
     "bsvlib>=0.4",
     "click>=8.1",
@@ -126,6 +141,11 @@ all = [
     "opentelemetry-api>=1.24",
     "opentelemetry-sdk>=1.24",
     "ipython>=8.0",
+    "litellm>=1.0",
+    "dspy-ai>=2.0",
+    "instructor>=1.0",
+    "smolagents>=1.0",
+    "semantic-kernel>=1.0",
     "tomli>=2.0; python_version < '3.11'",
 ]
 dev = [
@@ -147,6 +167,11 @@ dev = [
     "flask>=3.0",               # Flask integration tests
     "langchain-core>=0.2",      # LangChain integration tests
     "prometheus-client>=0.20",  # Prometheus metrics tests
+    "litellm>=1.0",             # LiteLLM integration tests
+    "dspy-ai>=2.0",             # DSPy integration tests
+    "instructor>=1.0",          # Instructor integration tests
+    "smolagents>=1.0",          # SmolAgents integration tests
+    "semantic-kernel>=1.0",     # Semantic Kernel integration tests
 ]
 
 [tool.pytest.ini_options]

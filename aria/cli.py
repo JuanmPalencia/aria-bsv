@@ -391,22 +391,42 @@ def report(epoch_id: str, db: str, fmt: str, out_path: Optional[str]) -> None:
 # aria export
 # ---------------------------------------------------------------------------
 
+_EXPORT_CSV_FIELDS = [
+    "record_id", "epoch_id", "model_id", "input_hash", "output_hash",
+    "confidence", "latency_ms", "timestamp", "sequence",
+]
+
+
 @cli.command()
 @click.option("--system", "system_id", default=None, help="Filter by system_id")
 @click.option("--epoch", "epoch_id", default=None, help="Export a single epoch")
-@click.option("--format", "fmt", default="json", type=click.Choice(["json", "csv", "jsonl"]), show_default=True)
-@click.option("--output", "out_path", required=True, help="Output file path")
+@click.option("--format", "fmt", default="json", type=click.Choice(["json", "csv", "jsonl"]),
+              show_default=True)
+@click.option("--output", "out_path", default=None,
+              help="Output file path (default: stdout)")
 @click.option("--limit", default=1000, show_default=True, help="Maximum epochs to export")
 @click.option("--db", default="aria.db", show_default=True)
 def export(
     system_id: Optional[str],
     epoch_id: Optional[str],
     fmt: str,
-    out_path: str,
+    out_path: Optional[str],
     limit: int,
     db: str,
 ) -> None:
-    """Export audit records to JSON, JSONL, or CSV for external analysis."""
+    """Export audit records to JSON, JSONL, or CSV for external analysis.
+
+    \b
+    Writes to --output file or to stdout when --output is omitted.
+
+    \b
+    CSV columns: record_id, epoch_id, model_id, input_hash, output_hash,
+                 confidence, latency_ms, timestamp, sequence
+    \b
+    Examples:
+      aria export --system my-ai --format jsonl --output records.jsonl
+      aria export --epoch <id> --format csv | head
+    """
     import csv
     import io
 
@@ -427,15 +447,13 @@ def export(
             all_records.append({
                 "record_id": rec.record_id,
                 "epoch_id": rec.epoch_id,
-                "system_id": ep.system_id,
                 "model_id": rec.model_id,
-                "sequence": rec.sequence,
                 "input_hash": rec.input_hash,
                 "output_hash": rec.output_hash,
                 "confidence": rec.confidence,
                 "latency_ms": rec.latency_ms,
-                "open_txid": ep.open_txid,
-                "close_txid": ep.close_txid,
+                "timestamp": ep.opened_at,
+                "sequence": rec.sequence,
             })
 
     if not all_records:
@@ -444,23 +462,35 @@ def export(
 
     if fmt == "json":
         content = json.dumps(all_records, indent=2)
-        with open(out_path, "w") as f:
-            f.write(content)
+        if out_path:
+            with open(out_path, "w") as f:
+                f.write(content)
+        else:
+            click.echo(content)
 
     elif fmt == "jsonl":
-        with open(out_path, "w") as f:
-            for rec in all_records:
-                f.write(json.dumps(rec) + "\n")
+        lines = "\n".join(json.dumps(rec) for rec in all_records)
+        if out_path:
+            with open(out_path, "w") as f:
+                f.write(lines + "\n")
+        else:
+            click.echo(lines)
 
     elif fmt == "csv":
         buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=list(all_records[0].keys()))
+        writer = csv.DictWriter(buf, fieldnames=_EXPORT_CSV_FIELDS,
+                                extrasaction="ignore")
         writer.writeheader()
         writer.writerows(all_records)
-        with open(out_path, "w", newline="") as f:
-            f.write(buf.getvalue())
+        csv_content = buf.getvalue()
+        if out_path:
+            with open(out_path, "w", newline="") as f:
+                f.write(csv_content)
+        else:
+            click.echo(csv_content, nl=False)
 
-    _ok(f"Exported {len(all_records)} records to {out_path} ({fmt})")
+    if out_path:
+        _ok(f"Exported {len(all_records)} records to {out_path} ({fmt})")
 
 
 # ---------------------------------------------------------------------------
@@ -1057,6 +1087,178 @@ def retry_status(db_path: Optional[str], as_json: bool) -> None:
             _err(f"Dead letters: {len(dead)} item(s)")
             for item in dead[:5]:
                 _info(f"  {item.item_id}: {item.last_error}")
+
+
+# ---------------------------------------------------------------------------
+# aria stats
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--system", "system_id", default=None,
+              help="Filter by system_id (shows aggregate for all systems if omitted)")
+@click.option("--db", default="aria.db", show_default=True)
+def stats(system_id: Optional[str], db: str) -> None:
+    """Show aggregate statistics for ARIA audit data.
+
+    \b
+    Reports:
+      - Total epochs and records
+      - Number of unique models
+      - Average and total latency across all records
+      - Date range of epoch activity (first / last opened_at)
+
+    \b
+    Examples:
+      aria stats
+      aria stats --system my-ai-app
+    """
+    import datetime as _dt
+
+    storage = _get_storage(db)
+    epochs_all = storage.list_epochs(system_id=system_id, limit=100_000)
+
+    if not epochs_all:
+        _info("No data found.")
+        return
+
+    total_epochs = len(epochs_all)
+    total_records = sum(e.records_count or 0 for e in epochs_all)
+
+    # Load individual records for per-record stats (latency, unique models).
+    all_records = []
+    for ep in epochs_all:
+        all_records.extend(storage.list_records_by_epoch(ep.epoch_id))
+
+    unique_models: set[str] = {r.model_id for r in all_records}
+    lats = [r.latency_ms for r in all_records if r.latency_ms is not None and r.latency_ms > 0]
+    total_latency = sum(lats)
+    avg_latency = total_latency / len(lats) if lats else 0.0
+
+    # Date range derived from epoch opened_at (unix int, seconds).
+    timestamps = [e.opened_at for e in epochs_all if e.opened_at]
+    if timestamps:
+        first_ts = _dt.datetime.fromtimestamp(
+            min(timestamps), tz=_dt.timezone.utc
+        ).isoformat()
+        last_ts = _dt.datetime.fromtimestamp(
+            max(timestamps), tz=_dt.timezone.utc
+        ).isoformat()
+    else:
+        first_ts = last_ts = "N/A"
+
+    # ── Render ────────────────────────────────────────────────────────────
+    title = click.style("ARIA Statistics", fg="cyan", bold=True)
+    if system_id:
+        title += click.style(f"  [{system_id}]", fg="yellow")
+    click.echo(title)
+    click.echo(click.style("─" * 52, fg="cyan"))
+
+    def _row(label: str, value: str, color: str = "white") -> None:
+        styled_label = click.style(f"{label}:", fg="cyan")
+        styled_value = click.style(value, fg=color)
+        click.echo(f"  {styled_label:<38} {styled_value}")
+
+    _row("Total epochs", str(total_epochs), "green")
+    _row("Total records", str(total_records), "green")
+    _row("Unique models", str(len(unique_models)), "yellow")
+    _row("Avg latency (ms)", f"{avg_latency:.1f}")
+    _row("Total latency (ms)", str(total_latency))
+    _row("First timestamp", first_ts)
+    _row("Last timestamp", last_ts)
+
+    if unique_models:
+        click.echo(click.style("\n  Models:", fg="cyan"))
+        for m in sorted(unique_models):
+            click.echo(f"    {click.style('•', fg='yellow')} {m}")
+
+
+# ---------------------------------------------------------------------------
+# aria batch-verify
+# ---------------------------------------------------------------------------
+
+@cli.command("batch-verify")
+@click.option("--open", "open_txids", required=True,
+              help="Comma-separated EPOCH_OPEN TXIDs to verify in parallel")
+@click.option("--network", default="mainnet",
+              type=click.Choice(["mainnet", "testnet"]), show_default=True)
+@click.option("--format", "fmt", default="text",
+              type=click.Choice(["text", "json"]), show_default=True)
+def batch_verify(open_txids: str, network: str, fmt: str) -> None:
+    """Verify multiple EPOCH_OPEN TXIDs in parallel against BSV.
+
+    TXIDs are resolved concurrently via asyncio.gather, so verification
+    time scales with the slowest response rather than summing all requests.
+
+    \b
+    JSON output fields per entry:
+      txid, verified, epoch_id, merkle_root, records_count, error
+
+    \b
+    Examples:
+      aria batch-verify --open <txid1>,<txid2>,<txid3>
+      aria batch-verify --open <txid1>,<txid2> --network testnet --format json
+    """
+    from aria.verify import Verifier, WhatsOnChainFetcher
+
+    txids = [t.strip() for t in open_txids.split(",") if t.strip()]
+    if not txids:
+        _err("No TXIDs provided.")
+        sys.exit(1)
+
+    fetcher = WhatsOnChainFetcher(network=network)
+    verifier = Verifier(network=network, tx_fetcher=fetcher)
+
+    async def _verify_all():
+        tasks = [verifier.verify_epoch(open_txid=txid) for txid in txids]
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    _info(f"Verifying {len(txids)} TXID(s) on {network}…")
+    raw_results = _run(_verify_all())
+
+    output = []
+    all_passed = True
+    for txid, res in zip(txids, raw_results):
+        if isinstance(res, Exception):
+            output.append({
+                "txid": txid,
+                "verified": False,
+                "epoch_id": "",
+                "merkle_root": "",
+                "records_count": 0,
+                "error": str(res),
+            })
+            all_passed = False
+        else:
+            output.append({
+                "txid": txid,
+                "verified": res.valid,
+                "epoch_id": res.epoch_id,
+                "merkle_root": res.merkle_root,
+                "records_count": res.records_count,
+                "error": res.error,
+            })
+            if not res.valid:
+                all_passed = False
+
+    if fmt == "json":
+        click.echo(json.dumps(output, indent=2))
+    else:
+        # Text table — keep styled icon separate so ANSI codes don't skew alignment.
+        click.echo(f"\n{'TXID':<22} {'STATUS':<10} {'EPOCH ID':<36} {'RECORDS':>7}")
+        click.echo("─" * 82)
+        for item in output:
+            txid_short = item["txid"][:20] + "…"
+            icon = click.style("✓", fg="green") if item["verified"] else click.style("✗", fg="red")
+            verdict = "PASS" if item["verified"] else "FAIL"
+            epoch_disp = item["epoch_id"] or "N/A"
+            click.echo(
+                f"{txid_short:<22} {icon} {verdict:<8} {epoch_disp:<36} "
+                f"{item['records_count']:>7}"
+            )
+        click.echo("")
+
+    if not all_passed:
+        sys.exit(2)
 
 
 # ---------------------------------------------------------------------------
