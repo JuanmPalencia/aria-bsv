@@ -1,0 +1,12 @@
+[package]
+name = "aria-bsv-merkle"
+description = "RFC 6962 Merkle tree for ARIA BRC-121 audit records"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+hex = { workspace = true }

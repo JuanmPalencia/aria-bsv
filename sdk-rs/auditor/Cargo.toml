@@ -1,0 +1,18 @@
+[package]
+name = "aria-bsv-auditor"
+description = "High-performance AI inference auditor for ARIA BRC-121"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+aria-bsv-hasher = { path = "../hasher" }
+aria-bsv-merkle = { path = "../merkle" }

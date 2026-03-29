@@ -1,0 +1,16 @@
+[package]
+name = "aria-bsv-hasher"
+description = "Canonical JSON serialization and SHA-256 hashing for ARIA BRC-121"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
