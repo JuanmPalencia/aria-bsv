@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ARIA Verification Portal</title>
+  <title>ARIA — Interactive Playground</title>
   <style>
     :root {
       --bg:       #0f172a;
       --surface:  #1e293b;
+      --surface2: #273347;
       --border:   #334155;
       --accent:   #06b6d4;
       --accent2:  #0891b2;
@@ -17,183 +18,197 @@
       --danger:   #ef4444;
       --warn:     #f59e0b;
       --radius:   10px;
-      --mono:     "JetBrains Mono", "Fira Code", "Consolas", monospace;
+      --mono:     "JetBrains Mono","Fira Code","Consolas",monospace;
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 16px; scroll-behavior: smooth; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:16px;scroll-behavior:smooth}
+    body{
+      background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      min-height:100vh;display:flex;flex-direction:column;
     }
 
-    /* ── Header ─────────────────────────────────────────── */
-    header {
-      padding: 1.5rem 2rem;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
+    /* ── Header */
+    header{
+      padding:1.25rem 2rem;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:.75rem;
     }
-    .logo {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 900; font-size: 1rem; color: #fff; flex-shrink: 0;
+    .logo{
+      width:36px;height:36px;border-radius:8px;flex-shrink:0;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      display:flex;align-items:center;justify-content:center;
+      font-weight:900;font-size:1rem;color:#fff;
     }
-    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
-    header span { color: var(--muted); font-size: 0.875rem; margin-left: auto; }
-
-    /* ── Main ────────────────────────────────────────────── */
-    main { flex: 1; max-width: 860px; width: 100%; margin: 0 auto; padding: 2.5rem 1.5rem; }
-
-    /* ── Search card ─────────────────────────────────────── */
-    .search-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 2rem;
-      margin-bottom: 2rem;
-    }
-    .search-card h2 {
-      font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;
-    }
-    .search-card p {
-      color: var(--muted); font-size: 0.875rem; margin-bottom: 1.5rem; line-height: 1.6;
-    }
-    .field-group { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem; }
-    label { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-bottom: 0.25rem; display: block; }
-    input[type="text"] {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      padding: 0.65rem 0.9rem;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    input[type="text"]:focus { border-color: var(--accent); }
-    input[type="text"]::placeholder { color: var(--muted); opacity: 0.6; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.65rem 1.5rem;
-      border-radius: 6px; border: none; cursor: pointer;
-      font-size: 0.9rem; font-weight: 600;
-      transition: opacity 0.15s, transform 0.1s;
-    }
-    .btn:active { transform: scale(0.98); }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { opacity: 0.9; }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-ghost {
-      background: transparent; color: var(--muted);
-      border: 1px solid var(--border);
-      font-size: 0.8rem; padding: 0.5rem 1rem;
-    }
-    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
-
-    /* ── Spinner ─────────────────────────────────────────── */
-    #spinner {
-      display: none; align-items: center; gap: 0.75rem;
-      color: var(--muted); font-size: 0.875rem; margin-top: 1rem;
-    }
-    #spinner.active { display: flex; }
-    .spin {
-      width: 18px; height: 18px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Result card ─────────────────────────────────────── */
-    #result { display: none; }
-    #result.active { display: block; }
-    .result-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .result-header {
-      padding: 1.5rem 2rem;
-      display: flex; align-items: flex-start; justify-content: space-between;
-      gap: 1rem; flex-wrap: wrap;
-      border-bottom: 1px solid var(--border);
-    }
-    .status-badge {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.35rem 0.85rem;
-      border-radius: 99px; font-size: 0.8rem; font-weight: 700;
-      letter-spacing: 0.04em; text-transform: uppercase;
-    }
-    .badge-valid   { background: rgba(34,197,94,.15);  color: var(--success); }
-    .badge-tampered{ background: rgba(239,68,68,.15);  color: var(--danger);  }
-    .badge-error   { background: rgba(245,158,11,.15); color: var(--warn);    }
-    .result-headline { font-size: 1rem; font-weight: 600; margin-top: 0.5rem; }
-    .result-subline  { color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem; line-height: 1.5; }
-    .action-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-
-    /* ── Detail grid ─────────────────────────────────────── */
-    .detail-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 1px;
-      background: var(--border);
-    }
-    .detail-cell {
-      background: var(--surface);
-      padding: 1rem 1.5rem;
-    }
-    .detail-cell .key {
-      font-size: 0.7rem; color: var(--muted); text-transform: uppercase;
-      letter-spacing: 0.06em; margin-bottom: 0.3rem;
-    }
-    .detail-cell .val {
-      font-size: 0.85rem; font-family: var(--mono);
-      word-break: break-all; color: var(--text);
-    }
-    .detail-cell .val.na { color: var(--muted); font-family: inherit; font-style: italic; }
-
-    /* ── EU AI Act section ───────────────────────────────── */
-    .info-box {
-      padding: 1.25rem 1.5rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.8rem; color: var(--muted); line-height: 1.7;
-    }
-    .info-box strong { color: var(--text); }
-
-    /* ── Footer ──────────────────────────────────────────── */
-    footer {
-      text-align: center; padding: 1.5rem;
-      border-top: 1px solid var(--border);
-      color: var(--muted); font-size: 0.75rem;
-    }
-    footer a { color: var(--accent); text-decoration: none; }
-
-    /* ── Print styles ────────────────────────────────────── */
-    @media print {
-      body { background: #fff; color: #000; }
-      header, footer, .search-card, .action-row, #spinner { display: none !important; }
-      .result-card { border: 1px solid #ccc; }
-      .result-header { background: #f9f9f9; }
-      .detail-cell { background: #fff; }
+    header h1{font-size:1.2rem;font-weight:700;letter-spacing:-.02em}
+    header .htag{
+      margin-left:auto;font-size:.75rem;color:var(--muted);
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:99px;padding:.2rem .7rem;
     }
 
-    /* ── Responsive ──────────────────────────────────────── */
-    @media (max-width: 600px) {
-      main { padding: 1.5rem 1rem; }
-      .search-card { padding: 1.25rem; }
-      .result-header { flex-direction: column; }
-      .detail-grid { grid-template-columns: 1fr; }
+    /* ── Tabs */
+    .tab-bar{
+      display:flex;gap:.25rem;padding:.75rem 2rem 0;
+      border-bottom:1px solid var(--border);background:var(--bg);
+    }
+    .tab-btn{
+      padding:.55rem 1.25rem;border:none;cursor:pointer;
+      border-radius:6px 6px 0 0;font-size:.85rem;font-weight:600;
+      background:transparent;color:var(--muted);
+      border-bottom:2px solid transparent;transition:all .15s;
+    }
+    .tab-btn:hover{color:var(--text)}
+    .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+    /* ── Main */
+    main{flex:1;max-width:900px;width:100%;margin:0 auto;padding:2rem 1.5rem}
+    .panel{display:none}
+    .panel.active{display:block}
+
+    /* ── Card */
+    .card{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:1.75rem 2rem;margin-bottom:1.5rem;
+    }
+    .card h2{font-size:1.05rem;font-weight:600;margin-bottom:.4rem}
+    .card p{color:var(--muted);font-size:.875rem;line-height:1.6;margin-bottom:1.25rem}
+
+    /* ── Form */
+    label{font-size:.78rem;color:var(--muted);font-weight:500;display:block;margin-bottom:.3rem}
+    input[type="text"],textarea{
+      width:100%;background:var(--bg);border:1px solid var(--border);
+      border-radius:6px;color:var(--text);font-family:var(--mono);
+      font-size:.8rem;padding:.65rem .9rem;outline:none;transition:border-color .15s;
+    }
+    input[type="text"]:focus,textarea:focus{border-color:var(--accent)}
+    input[type="text"]::placeholder,textarea::placeholder{color:var(--muted);opacity:.6}
+    textarea{resize:vertical;min-height:110px;line-height:1.5}
+    .field{margin-bottom:1rem}
+
+    /* ── Buttons */
+    .btn{
+      display:inline-flex;align-items:center;gap:.4rem;
+      padding:.6rem 1.4rem;border-radius:6px;border:none;cursor:pointer;
+      font-size:.875rem;font-weight:600;transition:opacity .15s,transform .1s;
+    }
+    .btn:active{transform:scale(.98)}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover{opacity:.88}
+    .btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+    .btn-ghost{
+      background:transparent;color:var(--muted);
+      border:1px solid var(--border);font-size:.78rem;padding:.45rem .9rem;
+    }
+    .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+    .btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}
+
+    /* ── Spinner */
+    .spinner{display:none;align-items:center;gap:.65rem;color:var(--muted);font-size:.85rem;margin-top:.75rem}
+    .spinner.on{display:flex}
+    .spin{
+      width:16px;height:16px;border:2px solid var(--border);
+      border-top-color:var(--accent);border-radius:50%;
+      animation:spin .7s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Output */
+    .output{display:none;margin-top:1.25rem}
+    .output.on{display:block}
+    .result-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    .result-header{
+      padding:1.25rem 1.5rem;display:flex;align-items:flex-start;
+      justify-content:space-between;gap:1rem;flex-wrap:wrap;
+      border-bottom:1px solid var(--border);
+    }
+    .status{
+      display:inline-flex;align-items:center;gap:.35rem;
+      padding:.3rem .75rem;border-radius:99px;font-size:.75rem;
+      font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    }
+    .s-ok  {background:rgba(34,197,94,.15);color:var(--success)}
+    .s-err {background:rgba(239,68,68,.15);color:var(--danger)}
+    .s-warn{background:rgba(245,158,11,.15);color:var(--warn)}
+    .headline{font-size:.95rem;font-weight:600;margin-top:.4rem}
+    .subline{color:var(--muted);font-size:.82rem;margin-top:.2rem;line-height:1.5}
+
+    .detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--border)}
+    .cell{background:var(--surface);padding:.9rem 1.25rem}
+    .cell .key{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.25rem}
+    .cell .val{font-size:.8rem;font-family:var(--mono);word-break:break-all}
+    .cell .val.na{color:var(--muted);font-family:inherit;font-style:italic}
+    .info-box{padding:1rem 1.25rem;border-top:1px solid var(--border);font-size:.78rem;color:var(--muted);line-height:1.7}
+    .info-box strong{color:var(--text)}
+
+    /* ── JSON block */
+    .json-block{
+      background:var(--bg);border-radius:0 0 var(--radius) var(--radius);
+      padding:1.25rem;overflow-x:auto;
+    }
+    .json-block pre{font-family:var(--mono);font-size:.78rem;line-height:1.6;color:var(--text)}
+    .jk{color:#7dd3fc}.js{color:#86efac}.jn{color:#fda4af}.jb{color:var(--warn)}.jnu{color:var(--muted)}
+
+    /* ── Hash display */
+    .hash-display{
+      background:var(--bg);border:1px solid var(--border);border-radius:6px;
+      padding:.75rem 1rem;font-family:var(--mono);font-size:.78rem;
+      word-break:break-all;display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;
+      margin-top:.6rem;
+    }
+    .hash-display span{flex:1;line-height:1.5}
+    .copy-btn{
+      cursor:pointer;background:none;border:1px solid var(--border);
+      color:var(--muted);border-radius:4px;padding:.25rem .5rem;
+      font-size:.7rem;white-space:nowrap;flex-shrink:0;transition:all .15s;
+    }
+    .copy-btn:hover{color:var(--text);border-color:var(--muted)}
+
+    /* ── Drop zone */
+    .drop-zone{
+      border:2px dashed var(--border);border-radius:var(--radius);
+      padding:2.5rem 1.5rem;text-align:center;cursor:pointer;
+      transition:border-color .15s,background .15s;
+    }
+    .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(6,182,212,.05)}
+    .drop-icon{font-size:2rem;margin-bottom:.5rem;opacity:.7}
+    .drop-text{color:var(--muted);font-size:.875rem}
+    .drop-text strong{color:var(--text)}
+    .file-info{
+      margin-top:.9rem;background:var(--surface2);border:1px solid var(--border);
+      border-radius:6px;padding:.7rem 1rem;font-size:.8rem;
+      display:flex;flex-wrap:wrap;gap:.4rem 1.5rem;
+    }
+    .file-info span{color:var(--muted)}
+    .file-info strong{color:var(--text);font-family:var(--mono)}
+
+    /* ── Progress bar */
+    .progress{height:3px;background:var(--border);border-radius:2px;margin-top:.75rem;overflow:hidden;display:none}
+    .progress.on{display:block}
+    .progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .18s}
+
+    /* ── Meta row */
+    .meta-row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:.75rem}
+    .meta-item label{margin-bottom:.15rem}
+    .meta-item .val{font-family:var(--mono);font-size:.82rem}
+
+    /* ── Code inline */
+    code{font-family:var(--mono);background:var(--surface2);padding:.1rem .3rem;border-radius:3px;font-size:.82em}
+
+    /* ── Footer */
+    footer{text-align:center;padding:1.25rem;border-top:1px solid var(--border);color:var(--muted);font-size:.72rem}
+    footer a{color:var(--accent);text-decoration:none}
+
+    /* ── Responsive */
+    @media(max-width:600px){
+      main{padding:1.25rem 1rem}
+      .card{padding:1.25rem}
+      .tab-bar{padding:.5rem 1rem 0}
+      .tab-btn{padding:.5rem .75rem;font-size:.78rem}
+    }
+    @media print{
+      body{background:#fff;color:#000}
+      header,.tab-bar,footer,.btn,.btn-row,.drop-zone{display:none!important}
+      .card,.result-card{border:1px solid #ccc}
     }
   </style>
 </head>
@@ -201,185 +216,462 @@
 
 <header>
   <div class="logo">A</div>
-  <h1>ARIA Verification Portal</h1>
-  <span>BRC-120 · BSV</span>
+  <h1>ARIA Interactive Playground</h1>
+  <span class="htag">BRC-121 · BSV</span>
 </header>
 
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('verify',this)">Verify Epoch</button>
+  <button class="tab-btn" onclick="switchTab('hash',this)">Hash a Prompt</button>
+  <button class="tab-btn" onclick="switchTab('dataset',this)">Anchor a Dataset</button>
+</div>
+
 <main>
-  <div class="search-card">
+
+<!-- ══════════════════════════ TAB 1 — VERIFY EPOCH ══════════════════════════ -->
+<div id="panel-verify" class="panel active">
+  <div class="card">
     <h2>Verify an AI audit epoch</h2>
-    <p>
-      Enter the BSV transaction ID of an ARIA <strong>EPOCH_OPEN</strong> to verify
-      the cryptographic integrity of the audited AI system's decision record.
-    </p>
+    <p>Enter the BSV transaction ID of an ARIA <strong>EPOCH_OPEN</strong> to verify
+       the cryptographic integrity of the audited AI system's decision record.</p>
     <form id="verify-form">
-      <div class="field-group">
-        <div>
-          <label for="open-txid">EPOCH_OPEN Transaction ID *</label>
-          <input type="text" id="open-txid" name="open_txid"
-                 placeholder="64-character hex transaction ID" maxlength="64" required />
-        </div>
-        <div>
-          <label for="close-txid">EPOCH_CLOSE Transaction ID (optional)</label>
-          <input type="text" id="close-txid" name="close_txid"
-                 placeholder="Required if not resolvable from local storage" maxlength="64" />
-        </div>
+      <div class="field">
+        <label for="open-txid">EPOCH_OPEN Transaction ID *</label>
+        <input type="text" id="open-txid" placeholder="64-character hex transaction ID" maxlength="64" required />
       </div>
-      <button class="btn btn-primary" type="submit" id="verify-btn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        Verify
-      </button>
+      <div class="field">
+        <label for="close-txid">EPOCH_CLOSE Transaction ID (optional)</label>
+        <input type="text" id="close-txid" placeholder="Required if not resolvable from local storage" maxlength="64" />
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" type="submit" id="verify-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+          Verify
+        </button>
+      </div>
     </form>
-    <div id="spinner">
-      <div class="spin"></div>
-      Querying BSV blockchain…
-    </div>
+    <div class="spinner" id="verify-spinner"><div class="spin"></div>Querying BSV blockchain…</div>
   </div>
 
-  <div id="result">
-    <div class="result-card" id="result-card">
+  <div class="output" id="verify-output">
+    <div class="result-card">
       <div class="result-header">
         <div>
-          <div id="status-badge" class="status-badge"></div>
-          <div id="result-headline" class="result-headline"></div>
-          <div id="result-subline" class="result-subline"></div>
+          <div id="v-badge" class="status"></div>
+          <div id="v-headline" class="headline"></div>
+          <div id="v-subline" class="subline"></div>
         </div>
-        <div class="action-row">
-          <button class="btn btn-ghost" onclick="downloadJson()">↓ JSON</button>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="downloadJson(_verifyResult,'aria-verification')">↓ JSON</button>
           <button class="btn btn-ghost" onclick="window.print()">⎙ PDF</button>
         </div>
       </div>
-      <div class="detail-grid" id="detail-grid"></div>
-      <div class="info-box" id="info-box" style="display:none"></div>
+      <div class="detail-grid" id="v-grid"></div>
+      <div class="info-box" id="v-infobox" style="display:none"></div>
     </div>
   </div>
+</div>
+
+<!-- ══════════════════════════ TAB 2 — HASH A PROMPT ══════════════════════════ -->
+<div id="panel-hash" class="panel">
+  <div class="card">
+    <h2>Hash a prompt or inference</h2>
+    <p>Enter any text (prompt, model response, or JSON payload). ARIA computes the
+       SHA-256 digest <strong>client-side</strong> — nothing leaves your browser.
+       The hash uniquely represents the input without exposing its content, satisfying
+       <strong>EU AI Act Art. 12</strong> tamper-evident logging requirements.</p>
+    <div class="field">
+      <label for="prompt-input">Input text</label>
+      <textarea id="prompt-input" placeholder="Paste your prompt, model response, or any text here…"></textarea>
+    </div>
+    <div class="field">
+      <label for="model-input">Model ID (optional)</label>
+      <input type="text" id="model-input" placeholder="e.g. gpt-4o, claude-sonnet-4-6, mistral-7b" />
+    </div>
+    <div class="field">
+      <label for="system-input">System ID (optional)</label>
+      <input type="text" id="system-input" placeholder="e.g. loan-decision-system" />
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="hashPrompt()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+        Compute Hash
+      </button>
+      <button class="btn btn-ghost" onclick="clearHash()">Clear</button>
+    </div>
+  </div>
+
+  <div class="output" id="hash-output">
+    <div class="card" style="margin-bottom:1rem">
+      <label>SHA-256 Digest</label>
+      <div class="hash-display">
+        <span id="hash-hex"></span>
+        <button class="copy-btn" onclick="copyEl('hash-hex',this)">Copy</button>
+      </div>
+      <div class="meta-row">
+        <div class="meta-item">
+          <label>Input size</label>
+          <div class="val" id="hash-size"></div>
+        </div>
+        <div class="meta-item">
+          <label>Canonical form</label>
+          <div class="val" id="hash-prefixed"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <h2 style="margin:0">Simulated AuditRecord</h2>
+        <button class="btn btn-ghost" onclick="downloadJson(_hashResult,'aria-audit-record')">↓ JSON</button>
+      </div>
+      <p>This is the BRC-121 record that would be committed to BSV for this inference event.
+         Pass the <code>input_hash</code> to <code>InferenceAuditor.record()</code> to anchor it on-chain.</p>
+      <div class="json-block"><pre id="hash-json"></pre></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ TAB 3 — ANCHOR A DATASET ══════════════════════════ -->
+<div id="panel-dataset" class="panel">
+  <div class="card">
+    <h2>Anchor a dataset or file</h2>
+    <p>Drop any file to compute its SHA-256 fingerprint. The hash is used by ARIA's
+       <code>DatasetAnchorer</code> to create a <strong>DATASET_ANCHOR</strong> payload
+       that proves the dataset's exact content at a specific point in time.
+       Processing is <strong>entirely client-side</strong> — your file is never uploaded.</p>
+
+    <div class="drop-zone" id="drop-zone"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave()" ondrop="onDrop(event)">
+      <div class="drop-icon">📂</div>
+      <div class="drop-text"><strong>Click to browse</strong> or drag a file here</div>
+      <div class="drop-text" style="margin-top:.25rem;font-size:.78rem">CSV, JSON, Parquet, images — any format</div>
+    </div>
+    <input type="file" id="file-input" style="display:none" onchange="handleFile(this.files[0])"/>
+    <div class="file-info" id="file-info" style="display:none"></div>
+    <div class="progress" id="ds-progress"><div class="progress-bar" id="ds-bar" style="width:0%"></div></div>
+
+    <div class="field" style="margin-top:1rem">
+      <label for="ds-columns">Column names (comma-separated, optional — for schema hash)</label>
+      <input type="text" id="ds-columns" placeholder="age, income, credit_score, label" />
+    </div>
+    <div class="field">
+      <label for="ds-rows">Row count (optional)</label>
+      <input type="text" id="ds-rows" placeholder="e.g. 50000" />
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="anchor-btn" onclick="anchorDataset()" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22V12M12 12l-4 4M12 12l4 4"/><path d="M20 7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/></svg>
+        Generate Anchor
+      </button>
+      <button class="btn btn-ghost" onclick="clearDataset()">Clear</button>
+    </div>
+    <div class="spinner" id="ds-spinner"><div class="spin"></div>Hashing file…</div>
+  </div>
+
+  <div class="output" id="dataset-output">
+    <div class="card" style="margin-bottom:1rem">
+      <label>Content Hash (SHA-256)</label>
+      <div class="hash-display">
+        <span id="ds-hex"></span>
+        <button class="copy-btn" onclick="copyEl('ds-hex',this)">Copy</button>
+      </div>
+      <div class="meta-row">
+        <div class="meta-item">
+          <label>Canonical format</label>
+          <div class="val" id="ds-prefixed"></div>
+        </div>
+        <div class="meta-item">
+          <label>Schema hash</label>
+          <div class="val" id="ds-schema"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <h2 style="margin:0">DATASET_ANCHOR Payload</h2>
+        <button class="btn btn-ghost" onclick="downloadJson(_dsResult,'aria-dataset-anchor')">↓ JSON</button>
+      </div>
+      <p>Pass this payload to <code>DatasetAnchorer.anchor_bytes()</code> to commit it to BSV
+         via an OP_RETURN transaction.</p>
+      <div class="json-block"><pre id="ds-json"></pre></div>
+    </div>
+  </div>
+</div>
+
 </main>
 
 <footer>
   ARIA · Auditable Real-time Inference Architecture ·
-  <a href="https://github.com/JuanmPalencia/aria-bsv" target="_blank" rel="noopener">BRC-120 Reference Implementation</a>
+  <a href="https://github.com/JuanmPalencia/aria-bsv" target="_blank" rel="noopener">BRC-121 Reference Implementation</a>
 </footer>
 
 <script>
-  let _lastResult = null;
+// ── State ────────────────────────────────────────────────────────────────────
+let _verifyResult = null;
+let _hashResult   = null;
+let _dsResult     = null;
+let _fileBuffer   = null;
+let _fileName     = '';
+let _fileSize     = 0;
+let _fileMime     = '';
 
-  document.getElementById('verify-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const openTxid  = document.getElementById('open-txid').value.trim();
-    const closeTxid = document.getElementById('close-txid').value.trim();
-    if (!openTxid) return;
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
 
-    setLoading(true);
-    hideResult();
+// ── SHA-256 (Web Crypto → pure-JS fallback) ──────────────────────────────────
+async function sha256(data) {
+  if (typeof data === 'string') data = new TextEncoder().encode(data);
+  if (crypto && crypto.subtle) {
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+  return sha256PureJS(Array.from(data));
+}
 
-    try {
-      let url = `/verify/${encodeURIComponent(openTxid)}`;
-      if (closeTxid) url += `?close_txid=${encodeURIComponent(closeTxid)}`;
-      const resp = await fetch(url);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
-      _lastResult = data;
-      renderResult(data);
-    } catch (err) {
-      renderError(err.message || String(err));
-    } finally {
-      setLoading(false);
+// RFC 6234 pure-JS SHA-256 (fallback for insecure origins)
+function sha256PureJS(msg) {
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const len=msg.length;msg=[...msg,0x80];
+  while(msg.length%64!==56)msg.push(0);
+  const big=len*8;
+  for(let i=7;i>=0;i--)msg.push((big/Math.pow(2,i*8))&0xff);
+  for(let i=0;i<msg.length;i+=64){
+    const w=[];
+    for(let j=0;j<16;j++)w.push((msg[i+j*4]<<24)|(msg[i+j*4+1]<<16)|(msg[i+j*4+2]<<8)|msg[i+j*4+3]);
+    for(let j=16;j<64;j++){
+      const s0=((w[j-15]>>>7)|(w[j-15]<<25))^((w[j-15]>>>18)|(w[j-15]<<14))^(w[j-15]>>>3);
+      const s1=((w[j-2]>>>17)|(w[j-2]<<15))^((w[j-2]>>>19)|(w[j-2]<<13))^(w[j-2]>>>10);
+      w.push((w[j-16]+s0+w[j-7]+s1)>>>0);
     }
-  });
-
-  function setLoading(on) {
-    document.getElementById('spinner').classList.toggle('active', on);
-    document.getElementById('verify-btn').disabled = on;
-  }
-
-  function hideResult() {
-    document.getElementById('result').classList.remove('active');
-  }
-
-  function renderResult(d) {
-    const badge    = document.getElementById('status-badge');
-    const headline = document.getElementById('result-headline');
-    const subline  = document.getElementById('result-subline');
-
-    if (d.tampered) {
-      badge.className = 'status-badge badge-tampered';
-      badge.textContent = '✗ Tampered';
-      headline.textContent = 'Cryptographic inconsistency detected';
-      subline.textContent = d.error || 'The record has been altered since it was committed to BSV.';
-    } else if (d.valid) {
-      badge.className = 'status-badge badge-valid';
-      badge.textContent = '✓ Verified';
-      headline.textContent = 'Epoch integrity confirmed';
-      subline.textContent = `System ${d.system_id || '—'} · ${d.records_count} decision record${d.records_count !== 1 ? 's' : ''} committed on BSV.`;
-    } else {
-      badge.className = 'status-badge badge-error';
-      badge.textContent = '⚠ Unverifiable';
-      headline.textContent = 'Verification could not complete';
-      subline.textContent = d.error || 'Unknown error.';
+    let [a,b,c,d,e,f,g,hv]=h;
+    for(let j=0;j<64;j++){
+      const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));
+      const ch=(e&f)^(~e&g);
+      const t1=(hv+S1+ch+K[j]+w[j])>>>0;
+      const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));
+      const maj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+maj)>>>0;
+      hv=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
     }
+    h=[h[0]+a,h[1]+b,h[2]+c,h[3]+d,h[4]+e,h[5]+f,h[6]+g,h[7]+hv].map(v=>v>>>0);
+  }
+  return h.map(v=>v.toString(16).padStart(8,'0')).join('');
+}
 
-    const fields = [
-      { key: 'Epoch ID',       val: d.epoch_id     },
-      { key: 'System ID',      val: d.system_id    },
-      { key: 'Model ID',       val: d.model_id     },
-      { key: 'Model version',  val: d.model_version},
-      { key: 'Decision date',  val: d.decided_at ? new Date(d.decided_at).toLocaleString() : null },
-      { key: 'Records',        val: d.records_count != null ? String(d.records_count) : null },
-      { key: 'Merkle root',    val: d.merkle_root  },
-    ];
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function uid(){return([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16))}
+function nowIso(){return new Date().toISOString()}
+function fmtBytes(n){if(n<1024)return n+' B';if(n<1024*1024)return(n/1024).toFixed(1)+' KB';return(n/1048576).toFixed(2)+' MB'}
+function copyEl(id,btn){
+  const t=document.getElementById(id).textContent;
+  navigator.clipboard?.writeText(t).then(()=>{btn.textContent='Copied!';setTimeout(()=>btn.textContent='Copy',1500)}).catch(()=>{});
+}
+function downloadJson(obj,name){
+  if(!obj)return;
+  const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download=name+'-'+Date.now()+'.json';a.click();URL.revokeObjectURL(a.href);
+}
+function renderJson(obj){
+  return JSON.stringify(obj,null,2)
+    .replace(/("(?:[^"\\]|\\.)*")(\s*:)/g,'<span class="jk">$1</span>$2')
+    .replace(/:\s*("(?:[^"\\]|\\.)*")/g,': <span class="js">$1</span>')
+    .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,': <span class="jn">$1</span>')
+    .replace(/:\s*(true|false)/g,': <span class="jb">$1</span>')
+    .replace(/:\s*(null)/g,': <span class="jnu">$1</span>');
+}
 
-    const grid = document.getElementById('detail-grid');
-    grid.innerHTML = fields.map(f => `
-      <div class="detail-cell">
-        <div class="key">${esc(f.key)}</div>
-        <div class="val${f.val ? '' : ' na'}">${f.val ? esc(f.val) : 'n/a'}</div>
-      </div>
-    `).join('');
+// ── TAB 1 — Verify Epoch ─────────────────────────────────────────────────────
+document.getElementById('verify-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const openTxid  = document.getElementById('open-txid').value.trim();
+  const closeTxid = document.getElementById('close-txid').value.trim();
+  if (!openTxid) return;
+  document.getElementById('verify-spinner').classList.add('on');
+  document.getElementById('verify-output').classList.remove('on');
+  document.getElementById('verify-btn').disabled = true;
+  try {
+    let url = `/verify/${encodeURIComponent(openTxid)}`;
+    if (closeTxid) url += `?close_txid=${encodeURIComponent(closeTxid)}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+    _verifyResult = data;
+    renderVerify(data);
+  } catch(err) {
+    _verifyResult = {valid:false,tampered:false,error:err.message||String(err),epoch_id:'',system_id:'',records_count:0,merkle_root:'',model_id:null,model_version:null,decided_at:null};
+    renderVerify(_verifyResult);
+  } finally {
+    document.getElementById('verify-spinner').classList.remove('on');
+    document.getElementById('verify-btn').disabled = false;
+  }
+});
 
-    const infoBox = document.getElementById('info-box');
-    if (d.valid) {
-      infoBox.style.display = '';
-      infoBox.innerHTML = `
-        <strong>What does this mean?</strong><br>
-        The EPOCH_OPEN and EPOCH_CLOSE transactions on BSV are cryptographically linked.
-        The Merkle root in EPOCH_CLOSE commits all ${d.records_count} inference records.
-        No record can be added, removed, or modified without invalidating the root hash —
-        a tamper attempt would be immediately detectable.
-        ${d.decided_at ? `<br><br><strong>EU AI Act:</strong> This epoch was sealed on
-        <strong>${new Date(d.decided_at).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})}</strong>
-        and constitutes an immutable audit trail suitable for Article 9 risk-management
-        and Article 13 transparency obligations.` : ''}
-      `;
-    } else {
-      infoBox.style.display = 'none';
-    }
+function renderVerify(d) {
+  const badge = document.getElementById('v-badge');
+  const hl    = document.getElementById('v-headline');
+  const sub   = document.getElementById('v-subline');
+  if (d.tampered) {
+    badge.className='status s-err';badge.textContent='✗ Tampered';
+    hl.textContent='Cryptographic inconsistency detected';
+    sub.textContent=d.error||'Record has been altered since BSV commitment.';
+  } else if (d.valid) {
+    badge.className='status s-ok';badge.textContent='✓ Verified';
+    hl.textContent='Epoch integrity confirmed';
+    sub.textContent=`System ${d.system_id||'—'} · ${d.records_count} record${d.records_count!==1?'s':''} committed on BSV.`;
+  } else {
+    badge.className='status s-warn';badge.textContent='⚠ Unverifiable';
+    hl.textContent='Verification could not complete';
+    sub.textContent=d.error||'Unknown error.';
+  }
+  const fields=[
+    {key:'Epoch ID',val:d.epoch_id},{key:'System ID',val:d.system_id},
+    {key:'Model ID',val:d.model_id},{key:'Model version',val:d.model_version},
+    {key:'Decision date',val:d.decided_at?new Date(d.decided_at).toLocaleString():null},
+    {key:'Records',val:d.records_count!=null?String(d.records_count):null},
+    {key:'Merkle root',val:d.merkle_root},
+  ];
+  document.getElementById('v-grid').innerHTML=fields.map(f=>`<div class="cell"><div class="key">${esc(f.key)}</div><div class="val${f.val?'':' na'}">${f.val?esc(f.val):'n/a'}</div></div>`).join('');
+  const ib=document.getElementById('v-infobox');
+  if(d.valid){
+    ib.style.display='';
+    ib.innerHTML=`<strong>What does this mean?</strong><br>The EPOCH_OPEN and EPOCH_CLOSE transactions on BSV are cryptographically linked. The Merkle root commits all ${d.records_count} inference records — tampering any record invalidates the root hash immediately.${d.decided_at?`<br><br><strong>EU AI Act:</strong> Epoch sealed on <strong>${new Date(d.decided_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong> — immutable audit trail for Art. 9 risk management and Art. 13 transparency obligations.`:''}`;
+  } else ib.style.display='none';
+  document.getElementById('verify-output').classList.add('on');
+}
 
-    document.getElementById('result').classList.add('active');
+// ── TAB 2 — Hash a Prompt ────────────────────────────────────────────────────
+async function hashPrompt() {
+  const text = document.getElementById('prompt-input').value;
+  if (!text) { alert('Enter some text first.'); return; }
+  const model  = document.getElementById('model-input').value.trim()  || 'unknown-model';
+  const sysid  = document.getElementById('system-input').value.trim() || 'aria-playground';
+  const hex    = await sha256(text);
+  const bytes  = new TextEncoder().encode(text).length;
+
+  const record = {
+    payload_type: 'AUDIT_RECORD',
+    brc_version:  '0.4.0',
+    record_id:    uid(),
+    epoch_id:     uid(),
+    system_id:    sysid,
+    model_id:     model,
+    input_hash:   'sha256:' + hex,
+    output_hash:  null,
+    confidence:   null,
+    recorded_at:  nowIso(),
+    _note: 'Simulated record — computed client-side, not anchored to BSV'
+  };
+  _hashResult = record;
+
+  document.getElementById('hash-hex').textContent      = hex;
+  document.getElementById('hash-size').textContent     = bytes + ' bytes (UTF-8)';
+  document.getElementById('hash-prefixed').textContent = 'sha256:' + hex;
+  document.getElementById('hash-json').innerHTML       = renderJson(record);
+  document.getElementById('hash-output').classList.add('on');
+}
+
+function clearHash() {
+  ['prompt-input','model-input','system-input'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('hash-output').classList.remove('on');
+  _hashResult = null;
+}
+
+// ── TAB 3 — Anchor a Dataset ─────────────────────────────────────────────────
+function onDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('drag-over')}
+function onDragLeave(){document.getElementById('drop-zone').classList.remove('drag-over')}
+function onDrop(e){
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const f=e.dataTransfer?.files?.[0];
+  if(f)handleFile(f);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  _fileName = file.name;
+  _fileSize = file.size;
+  _fileMime = file.type || 'application/octet-stream';
+  const fi = document.getElementById('file-info');
+  fi.style.display='flex';
+  fi.innerHTML=`<span>Name: <strong>${esc(file.name)}</strong></span><span>Size: <strong>${fmtBytes(file.size)}</strong></span><span>Type: <strong>${esc(_fileMime)}</strong></span>`;
+  document.getElementById('anchor-btn').disabled = false;
+  document.getElementById('dataset-output').classList.remove('on');
+  _fileBuffer = null;
+  const reader = new FileReader();
+  reader.onload = e => { _fileBuffer = e.target.result; };
+  reader.readAsArrayBuffer(file);
+}
+
+async function anchorDataset() {
+  if (!_fileBuffer) { alert('File still loading — please wait a moment.'); return; }
+  document.getElementById('ds-spinner').classList.add('on');
+  document.getElementById('ds-progress').classList.add('on');
+  const bar = document.getElementById('ds-bar');
+  bar.style.width = '0%';
+  const anim = setInterval(() => {
+    const w = parseFloat(bar.style.width) || 0;
+    if (w < 82) bar.style.width = (w + 6) + '%';
+  }, 80);
+
+  const hex = await sha256(new Uint8Array(_fileBuffer));
+  const colsRaw = document.getElementById('ds-columns').value.trim();
+  const cols = colsRaw ? colsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const rowsRaw = document.getElementById('ds-rows').value.trim();
+  const rowCount = rowsRaw && /^\d+$/.test(rowsRaw) ? parseInt(rowsRaw, 10) : null;
+  let schemaHash = null;
+  if (cols.length) {
+    schemaHash = 'sha256:' + await sha256([...cols].sort().join(','));
   }
 
-  function renderError(msg) {
-    const d = { valid: false, tampered: false, error: msg,
-                epoch_id: '', system_id: '', records_count: 0,
-                merkle_root: '', model_id: null, model_version: null, decided_at: null };
-    _lastResult = d;
-    renderResult(d);
-  }
+  clearInterval(anim);
+  bar.style.width = '100%';
+  setTimeout(() => { document.getElementById('ds-progress').classList.remove('on'); bar.style.width='0%'; }, 500);
+  document.getElementById('ds-spinner').classList.remove('on');
 
-  function downloadJson() {
-    if (!_lastResult) return;
-    const blob = new Blob([JSON.stringify(_lastResult, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `aria-verification-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
+  const anchor = {
+    payload_type: 'DATASET_ANCHOR',
+    brc_version:  '0.4.0',
+    content_hash: 'sha256:' + hex,
+    schema_hash:  schemaHash,
+    column_names: cols.length ? cols : null,
+    row_count:    rowCount,
+    media_type:   _fileMime,
+    file_name:    _fileName,
+    byte_length:  _fileSize,
+    nonce:        Math.floor(Math.random() * 0x7fffffff),
+    anchored_at:  nowIso(),
+    _note: 'Simulated anchor — computed client-side, not yet committed to BSV'
+  };
+  _dsResult = anchor;
 
-  function esc(s) {
-    return String(s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  document.getElementById('ds-hex').textContent      = hex;
+  document.getElementById('ds-prefixed').textContent = 'sha256:' + hex;
+  document.getElementById('ds-schema').textContent   = schemaHash || '—';
+  document.getElementById('ds-json').innerHTML       = renderJson(anchor);
+  document.getElementById('dataset-output').classList.add('on');
+}
+
+function clearDataset() {
+  _fileBuffer = null; _fileName = ''; _fileSize = 0; _fileMime = ''; _dsResult = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-info').style.display = 'none';
+  document.getElementById('ds-columns').value = '';
+  document.getElementById('ds-rows').value = '';
+  document.getElementById('anchor-btn').disabled = true;
+  document.getElementById('dataset-output').classList.remove('on');
+}
 </script>
 </body>
 </html>
