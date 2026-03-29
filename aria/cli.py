@@ -2,6 +2,7 @@
 aria.cli — Command-line interface for the ARIA SDK.
 
 Usage:
+    aria keygen [--network testnet|mainnet] [--env .env] [--json]
     aria verify --open <txid> [--close <txid>] [--network mainnet|testnet]
     aria epochs list --system <id> [--limit 20]
     aria epochs show <epoch_id>
@@ -26,6 +27,7 @@ except ImportError:
 from aria.core.hasher import hash_file
 from aria.storage.sqlite import SQLiteStorage
 from aria.verify import Verifier, WhatsOnChainFetcher
+from aria.wallet.keygen import generate_keypair, write_env_file
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +67,41 @@ def cli() -> None:
 
     Cryptographic accountability for production AI systems on BSV.
     """
+
+
+# ---------------------------------------------------------------------------
+# aria keygen
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--network", default="testnet", type=click.Choice(["mainnet", "testnet"]),
+              show_default=True, help="BSV network for the key")
+@click.option("--env", "env_path", default=None, help="Write WIF to a .env file (e.g. --env .env)")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable JSON output")
+def keygen(network: str, env_path: Optional[str], as_json: bool) -> None:
+    """Generate a fresh BSV keypair for ARIA auditing.
+
+    The private key is shown ONCE. ARIA never stores it automatically.
+    You are responsible for saving it securely.
+
+    \b
+    Examples:
+      aria keygen                         # show key in terminal (testnet)
+      aria keygen --network mainnet       # mainnet key
+      aria keygen --env .env              # also append to .env file
+      aria keygen --json                  # JSON output for scripts
+    """
+    kp = generate_keypair(network=network)
+
+    if as_json:
+        click.echo(json.dumps(kp.to_dict(), indent=2))
+    else:
+        click.echo(str(kp))
+
+    if env_path:
+        write_env_file(kp, env_path)
+        _ok(f"WIF written to {env_path}")
+        _info("  Make sure .env is in your .gitignore!")
 
 
 # ---------------------------------------------------------------------------
