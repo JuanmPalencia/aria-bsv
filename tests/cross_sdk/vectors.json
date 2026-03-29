@@ -1,0 +1,208 @@
+{
+  "canonical_json": [
+    {
+      "label": "empty_object",
+      "input": {},
+      "expected_canonical": "b'{}'",
+      "expected_hash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "label": "single_key",
+      "input": {
+        "a": 1
+      },
+      "expected_canonical": "b'{\"a\":1}'",
+      "expected_hash": "sha256:015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"
+    },
+    {
+      "label": "sorted_keys",
+      "input": {
+        "b": 2,
+        "a": 1
+      },
+      "expected_canonical": "b'{\"a\":1,\"b\":2}'",
+      "expected_hash": "sha256:43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777"
+    },
+    {
+      "label": "nested",
+      "input": {
+        "z": {
+          "b": 2,
+          "a": 1
+        },
+        "a": 0
+      },
+      "expected_canonical": "b'{\"a\":0,\"z\":{\"a\":1,\"b\":2}}'",
+      "expected_hash": "sha256:59d176cd99b72175a563664f429ecec5d1cb31754d7d090b0592bda9b53fc021"
+    },
+    {
+      "label": "with_list",
+      "input": {
+        "items": [
+          3,
+          1,
+          2
+        ]
+      },
+      "expected_canonical": "b'{\"items\":[3,1,2]}'",
+      "expected_hash": "sha256:de21aef9c6d6b65cfe6dc3c9159d9969659d1f5b854c6249d871036c57a26966"
+    },
+    {
+      "label": "unicode",
+      "input": {
+        "name": "caf\u00e9"
+      },
+      "expected_canonical": "b'{\"name\":\"caf\\xc3\\xa9\"}'",
+      "expected_hash": "sha256:645fa443126a8954fc6d871912b8fc67bc2ee8feae417efe55546251962ca74d"
+    },
+    {
+      "label": "booleans",
+      "input": {
+        "t": true,
+        "f": false
+      },
+      "expected_canonical": "b'{\"f\":false,\"t\":true}'",
+      "expected_hash": "sha256:c22848c47426fcf4d27e55573c22f1d23546315c251e8e4bc384820ba5fae568"
+    },
+    {
+      "label": "null_value",
+      "input": {
+        "x": null
+      },
+      "expected_canonical": "b'{\"x\":null}'",
+      "expected_hash": "sha256:c6b8df5aba33a39cbdee46ffaf77fae93ea2aa7d99d66408162b05a42105bd71"
+    },
+    {
+      "label": "string_input",
+      "input": "hello world",
+      "expected_canonical": "b'\"hello world\"'",
+      "expected_hash": "sha256:9ddefe4435b21d901439e546d54a14a175a3493b9fd8fbf38d9ea6d3cbf70826"
+    },
+    {
+      "label": "number_input",
+      "input": 42,
+      "expected_canonical": "b'42'",
+      "expected_hash": "sha256:73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049"
+    }
+  ],
+  "hash_object": [
+    {
+      "index": 0,
+      "input": {
+        "model": "gpt-4",
+        "prompt": "What is 2+2?"
+      },
+      "expected_hash": "sha256:1562838f98652b8f68dc31ddda9c3ecce7125866e7a34b0be1ef6672438808d6"
+    },
+    {
+      "index": 1,
+      "input": {
+        "model": "claude-3",
+        "prompt": "Hello",
+        "temperature": 0.7
+      },
+      "expected_hash": "sha256:d216196bae403845f1520553fb038a407c6724a263879070487cbe16d5a79b74"
+    },
+    {
+      "index": 2,
+      "input": "simple string input",
+      "expected_hash": "sha256:b34a33ba4bf8dca032d5cd70283ceecab753b1fe7f6441b33eb3b97740424cb7"
+    },
+    {
+      "index": 3,
+      "input": {
+        "nested": {
+          "deep": {
+            "value": 42
+          }
+        }
+      },
+      "expected_hash": "sha256:265dd6ab9bcf566896349dec0df16690d4243abef7d854999a3640738af4cbac"
+    },
+    {
+      "index": 4,
+      "input": {
+        "list_field": [
+          1,
+          2,
+          3
+        ],
+        "name": "test"
+      },
+      "expected_hash": "sha256:6ba5c3f27f6e9db4ce257e46dc75efa88c6422645c77911a5cb24ef7e80a1961"
+    }
+  ],
+  "merkle": {
+    "leaves": [
+      "abc123",
+      "def456",
+      "789ghi",
+      "jkl012"
+    ],
+    "leaf_hashes": [
+      "sha256:3f59069122f3a32d3c09ce5ef4882e49feb7777b539cdc4be0d214fa3332e11e",
+      "sha256:e4ee4d51f78d13595969992f41b1462f78a9e440d19e3496f631c8791fe1b5af",
+      "sha256:a1d2d768b547d8e40d341b3082628ec1a410d7ccf2fff2ab07c8ecd75553a62d",
+      "sha256:540170b3cdb6a25df49f28074212826d7c7b0c28928bf5550e0c7119b191ea07"
+    ],
+    "expected_root": "sha256:dbfe2f0dd82f06c11989c6e49a911c370612941c1abf60c9e9c6e6da8f847aa6",
+    "proofs": {
+      "sha256:3f59069122f3a32d3c09ce5ef4882e49feb7777b539cdc4be0d214fa3332e11e": {
+        "target_hash": "sha256:3f59069122f3a32d3c09ce5ef4882e49feb7777b539cdc4be0d214fa3332e11e",
+        "proof_path": [
+          [
+            "sha256:c7b6d058bcc70fade59020c06a4fa72e1150be611a6d1d6342e3c4374f46116e",
+            "right"
+          ],
+          [
+            "sha256:b97b1fee3b0760dca6aeb1dba814a70fb106e65a39886fc5e79ad67463eea3f4",
+            "right"
+          ]
+        ],
+        "root": "sha256:dbfe2f0dd82f06c11989c6e49a911c370612941c1abf60c9e9c6e6da8f847aa6"
+      },
+      "sha256:e4ee4d51f78d13595969992f41b1462f78a9e440d19e3496f631c8791fe1b5af": {
+        "target_hash": "sha256:e4ee4d51f78d13595969992f41b1462f78a9e440d19e3496f631c8791fe1b5af",
+        "proof_path": [
+          [
+            "sha256:fe1176a529ff548c1dc574edd032627a4cd72313a2e7f23485289bba1263ca39",
+            "left"
+          ],
+          [
+            "sha256:b97b1fee3b0760dca6aeb1dba814a70fb106e65a39886fc5e79ad67463eea3f4",
+            "right"
+          ]
+        ],
+        "root": "sha256:dbfe2f0dd82f06c11989c6e49a911c370612941c1abf60c9e9c6e6da8f847aa6"
+      },
+      "sha256:a1d2d768b547d8e40d341b3082628ec1a410d7ccf2fff2ab07c8ecd75553a62d": {
+        "target_hash": "sha256:a1d2d768b547d8e40d341b3082628ec1a410d7ccf2fff2ab07c8ecd75553a62d",
+        "proof_path": [
+          [
+            "sha256:c3a081333c3b312cf9a6e2a459f3d8587534c9731775cb2d2a519f154b11d5c0",
+            "right"
+          ],
+          [
+            "sha256:c30c5a216b86e0c7bd6f015c7a7412eb2692481d521a951fb60b5527035b632a",
+            "left"
+          ]
+        ],
+        "root": "sha256:dbfe2f0dd82f06c11989c6e49a911c370612941c1abf60c9e9c6e6da8f847aa6"
+      },
+      "sha256:540170b3cdb6a25df49f28074212826d7c7b0c28928bf5550e0c7119b191ea07": {
+        "target_hash": "sha256:540170b3cdb6a25df49f28074212826d7c7b0c28928bf5550e0c7119b191ea07",
+        "proof_path": [
+          [
+            "sha256:e38c2215871f465e793c9726778acb9161f48631e2db68d03bcf9235980a7fc3",
+            "left"
+          ],
+          [
+            "sha256:c30c5a216b86e0c7bd6f015c7a7412eb2692481d521a951fb60b5527035b632a",
+            "left"
+          ]
+        ],
+        "root": "sha256:dbfe2f0dd82f06c11989c6e49a911c370612941c1abf60c9e9c6e6da8f847aa6"
+      }
+    }
+  }
+}
