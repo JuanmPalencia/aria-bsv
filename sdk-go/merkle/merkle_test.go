@@ -201,3 +201,84 @@ func TestSecondPreimage_LeafCannotMasqueradeAsInternal(t *testing.T) {
 		t.Error("second-preimage protection failed")
 	}
 }
+
+func TestBuildTree_MatchesManualAdd(t *testing.T) {
+	var manual merkle.Tree
+	manual.Add(aaHash)
+	manual.Add(bbHash)
+	manual.Add(ccHash)
+	built := merkle.BuildTree([]string{aaHash, bbHash, ccHash})
+
+	rootManual, _ := manual.Root()
+	rootBuilt, _ := built.Root()
+	if rootManual != rootBuilt {
+		t.Errorf("BuildTree root mismatch: %s vs %s", rootManual, rootBuilt)
+	}
+}
+
+func TestBuildTree_Empty(t *testing.T) {
+	tree := merkle.BuildTree([]string{})
+	if tree.Len() != 0 {
+		t.Errorf("expected 0 leaves, got %d", tree.Len())
+	}
+}
+
+func TestTree_Leaves_ReturnsCopy(t *testing.T) {
+	var tree merkle.Tree
+	tree.Add(aaHash)
+	tree.Add(bbHash)
+	leaves := tree.Leaves()
+	if len(leaves) != 2 {
+		t.Errorf("expected 2 leaves, got %d", len(leaves))
+	}
+	// Mutate the returned slice — should not affect tree
+	leaves[0] = ccHash
+	if tree.Leaves()[0] != aaHash {
+		t.Error("Leaves() should return a copy, not a reference")
+	}
+}
+
+func TestTree_Contains(t *testing.T) {
+	var tree merkle.Tree
+	tree.Add(aaHash)
+	tree.Add(bbHash)
+	if !tree.Contains(aaHash) {
+		t.Error("aaHash should be contained")
+	}
+	if tree.Contains(ccHash) {
+		t.Error("ccHash should not be contained")
+	}
+}
+
+func TestComputeRootFromBytes_SingleItem(t *testing.T) {
+	root, err := merkle.ComputeRootFromBytes([][]byte{[]byte("hello")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(root) != 64 {
+		t.Errorf("expected 64-char root, got %d", len(root))
+	}
+}
+
+func TestComputeRootFromBytes_ReturnsErrorForEmpty(t *testing.T) {
+	_, err := merkle.ComputeRootFromBytes([][]byte{})
+	if err == nil {
+		t.Error("expected error for empty input")
+	}
+}
+
+func TestComputeRootFromBytes_DifferentDataDifferentRoot(t *testing.T) {
+	r1, _ := merkle.ComputeRootFromBytes([][]byte{[]byte("a")})
+	r2, _ := merkle.ComputeRootFromBytes([][]byte{[]byte("b")})
+	if r1 == r2 {
+		t.Error("different data should produce different roots")
+	}
+}
+
+func TestComputeRootFromBytes_OrderSensitive(t *testing.T) {
+	r1, _ := merkle.ComputeRootFromBytes([][]byte{[]byte("a"), []byte("b")})
+	r2, _ := merkle.ComputeRootFromBytes([][]byte{[]byte("b"), []byte("a")})
+	if r1 == r2 {
+		t.Error("order should matter")
+	}
+}

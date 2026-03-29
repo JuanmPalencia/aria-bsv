@@ -277,3 +277,141 @@ func TestFlush_OnFlushNil(t *testing.T) {
 		t.Error("expected buffer cleared after flush")
 	}
 }
+
+func TestStats_InitialState(t *testing.T) {
+	a := auditor.New(auditor.Config{SystemID: "my-system", BatchSize: 50})
+	s := a.Stats()
+	if s.SystemID != "my-system" {
+		t.Errorf("wrong system_id: %s", s.SystemID)
+	}
+	if s.BatchSize != 50 {
+		t.Errorf("wrong batch_size: %d", s.BatchSize)
+	}
+	if s.Buffered != 0 {
+		t.Errorf("expected 0 buffered, got %d", s.Buffered)
+	}
+	if s.TotalRecorded != 0 {
+		t.Errorf("expected 0 total, got %d", s.TotalRecorded)
+	}
+}
+
+func TestStats_AfterRecords(t *testing.T) {
+	a := auditor.New(auditor.Config{SystemID: "s", BatchSize: 100})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Record("m", "i", "o", 0.5, 0)
+	s := a.Stats()
+	if s.Buffered != 2 {
+		t.Errorf("expected 2 buffered, got %d", s.Buffered)
+	}
+	if s.TotalRecorded != 2 {
+		t.Errorf("expected 2 total, got %d", s.TotalRecorded)
+	}
+}
+
+func TestStats_TotalRecorded_IncludesFlushed(t *testing.T) {
+	a := auditor.New(auditor.Config{SystemID: "s", BatchSize: 100})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Flush()
+	a.Record("m", "i", "o", 0.5, 0)
+	s := a.Stats()
+	if s.TotalRecorded != 2 {
+		t.Errorf("expected total 2 (1 flushed + 1 pending), got %d", s.TotalRecorded)
+	}
+	if s.Buffered != 1 {
+		t.Errorf("expected 1 buffered, got %d", s.Buffered)
+	}
+}
+
+func TestReset_ClearsBuffer(t *testing.T) {
+	a := auditor.New(auditor.Config{SystemID: "s", BatchSize: 100})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Reset()
+	if a.Len() != 0 {
+		t.Errorf("expected 0 after Reset, got %d", a.Len())
+	}
+}
+
+func TestReset_DoesNotCallOnFlush(t *testing.T) {
+	var called bool
+	a := auditor.New(auditor.Config{
+		SystemID:  "s",
+		BatchSize: 100,
+		OnFlush: func(_ []*auditor.Record) error {
+			called = true
+			return nil
+		},
+	})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Reset()
+	if called {
+		t.Error("Reset should not call OnFlush")
+	}
+}
+
+func TestStats_TotalRecorded_preserved_after_Reset(t *testing.T) {
+	a := auditor.New(auditor.Config{SystemID: "s", BatchSize: 100})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Reset()
+	s := a.Stats()
+	if s.TotalRecorded != 2 {
+		t.Errorf("TotalRecorded should persist after Reset, got %d", s.TotalRecorded)
+	}
+}
+
+func TestSetOnFlush_UpdatesCallback(t *testing.T) {
+	var first, second bool
+	a := auditor.New(auditor.Config{
+		SystemID:  "s",
+		BatchSize: 100,
+		OnFlush: func(_ []*auditor.Record) error {
+			first = true
+			return nil
+		},
+	})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Flush()
+	if !first {
+		t.Error("first flush callback not called")
+	}
+
+	a.SetOnFlush(func(_ []*auditor.Record) error {
+		second = true
+		return nil
+	})
+	a.Record("m", "i", "o", 0.5, 0)
+	a.Flush()
+	if !second {
+		t.Error("second flush callback not called after SetOnFlush")
+	}
+}
+
+func TestRecordWithMeta_MetadataAttached(t *testing.T) {
+	var rec *auditor.Record
+	a := auditor.New(auditor.Config{
+		SystemID:  "s",
+		BatchSize: 100,
+		OnFlush: func(recs []*auditor.Record) error {
+			rec = recs[0]
+			return nil
+		},
+	})
+	meta := map[string]interface{}{"session": "abc", "user": "alice"}
+	a.RecordWithMeta("m", "in", "out", 0.9, 10, meta)
+	a.Flush()
+	if rec == nil {
+		t.Fatal("no record flushed")
+	}
+	if rec.Metadata["session"] != "abc" {
+		t.Errorf("metadata not attached: %v", rec.Metadata)
+	}
+}
+
+func TestRecordWithMeta_EmptyMetaOk(t *testing.T) {
+	a := auditor.New(auditor.Config{SystemID: "s", BatchSize: 100})
+	id, err := a.RecordWithMeta("m", "i", "o", 0.5, 0, nil)
+	if err != nil || id == "" {
+		t.Errorf("unexpected error or empty id: %v %s", err, id)
+	}
+}

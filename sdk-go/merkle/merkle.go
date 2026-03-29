@@ -176,3 +176,42 @@ func VerifyProof(proof *MerkleProof, expectedRoot string) (bool, error) {
 	computed := hex.EncodeToString(current)
 	return computed == expectedRoot, nil
 }
+
+// BuildTree creates a Tree pre-populated with the given leaf hashes.
+func BuildTree(leafHashes []string) *Tree {
+	t := &Tree{leaves: make([]string, len(leafHashes))}
+	copy(t.leaves, leafHashes)
+	return t
+}
+
+// Leaves returns a copy of all leaf hashes in insertion order.
+func (t *Tree) Leaves() []string {
+	out := make([]string, len(t.leaves))
+	copy(out, t.leaves)
+	return out
+}
+
+// Contains reports whether the given leaf hash exists in the tree.
+func (t *Tree) Contains(leafHash string) bool {
+	for _, l := range t.leaves {
+		if l == leafHash {
+			return true
+		}
+	}
+	return false
+}
+
+// ComputeRootFromBytes hashes each raw byte slice as a leaf and computes the
+// Merkle root. Equivalent to computing SHA-256 of each element, then calling
+// ComputeRoot — provided as a convenience for callers with raw data.
+func ComputeRootFromBytes(items [][]byte) (string, error) {
+	if len(items) == 0 {
+		return "", ErrEmptyTree
+	}
+	leafHashes := make([]string, len(items))
+	for i, item := range items {
+		sum := sha256.Sum256(item)
+		leafHashes[i] = hex.EncodeToString(sum[:])
+	}
+	return ComputeRoot(leafHashes)
+}

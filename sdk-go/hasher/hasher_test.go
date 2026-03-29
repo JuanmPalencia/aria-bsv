@@ -165,3 +165,96 @@ func TestHashObject_DifferentObjectsDifferentHash(t *testing.T) {
 		t.Error("different objects should have different hashes")
 	}
 }
+
+func TestHashString_ABCVector(t *testing.T) {
+	h := hasher.HashString("abc")
+	expected := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+	if h != expected {
+		t.Errorf("got %s", h)
+	}
+}
+
+func TestHashString_EmptyString(t *testing.T) {
+	h := hasher.HashString("")
+	expected := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	if h != expected {
+		t.Errorf("got %s", h)
+	}
+}
+
+func TestHashString_SameAsBytesEquivalent(t *testing.T) {
+	s := "hello world"
+	h1 := hasher.HashString(s)
+	h2 := hasher.HashBytes([]byte(s))
+	if h1 != h2 {
+		t.Errorf("HashString != HashBytes for same string: %s vs %s", h1, h2)
+	}
+}
+
+func TestMustHashObject_Panics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for un-hashable type")
+		}
+	}()
+	// A channel cannot be JSON-serialized
+	ch := make(chan int)
+	hasher.MustHashObject(ch)
+}
+
+func TestMustHashObject_Valid(t *testing.T) {
+	h := hasher.MustHashObject(map[string]interface{}{"x": 1})
+	if len(h) != 64 {
+		t.Errorf("expected 64-char hash, got %d", len(h))
+	}
+}
+
+func TestPrefixedHash(t *testing.T) {
+	h := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+	p := hasher.PrefixedHash(h)
+	if p != "sha256:"+h {
+		t.Errorf("unexpected prefix: %s", p)
+	}
+}
+
+func TestHashObjectPrefixed(t *testing.T) {
+	p, err := hasher.HashObjectPrefixed(map[string]interface{}{"a": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p) != len("sha256:")+64 {
+		t.Errorf("unexpected length: %s", p)
+	}
+	if p[:7] != "sha256:" {
+		t.Errorf("missing prefix: %s", p)
+	}
+}
+
+func TestEqual_SameHash(t *testing.T) {
+	h := hasher.HashString("test")
+	if !hasher.Equal(h, h) {
+		t.Error("same hash should be equal")
+	}
+}
+
+func TestEqual_DifferentHashes(t *testing.T) {
+	h1 := hasher.HashString("a")
+	h2 := hasher.HashString("b")
+	if hasher.Equal(h1, h2) {
+		t.Error("different hashes should not be equal")
+	}
+}
+
+func TestEqual_CaseInsensitive(t *testing.T) {
+	h := hasher.HashString("test")
+	upper := strings.ToUpper(h)
+	if !hasher.Equal(h, upper) {
+		t.Errorf("Equal should be case-insensitive: %s vs %s", h, upper)
+	}
+}
+
+func TestEqual_DifferentLengths(t *testing.T) {
+	if hasher.Equal("abc", "ab") {
+		t.Error("different lengths should not be equal")
+	}
+}

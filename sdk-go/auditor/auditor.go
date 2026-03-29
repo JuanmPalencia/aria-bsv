@@ -138,3 +138,64 @@ func (a *InferenceAuditor) flushLocked() error {
 	}
 	return nil
 }
+
+// Stats holds a snapshot of the auditor's current state.
+type Stats struct {
+	// Buffered is the number of records not yet flushed.
+	Buffered int
+	// TotalRecorded is the total number of records added since creation.
+	TotalRecorded uint64
+	// BatchSize is the configured auto-flush threshold.
+	BatchSize int
+	// SystemID is the identifier of the audited system.
+	SystemID string
+}
+
+// Stats returns a point-in-time snapshot of the auditor state.
+func (a *InferenceAuditor) Stats() Stats {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return Stats{
+		Buffered:      len(a.batch),
+		TotalRecorded: a.counter,
+		BatchSize:     a.cfg.BatchSize,
+		SystemID:      a.cfg.SystemID,
+	}
+}
+
+// SetOnFlush replaces the flush callback while the auditor is running.
+// Safe to call from any goroutine.
+func (a *InferenceAuditor) SetOnFlush(fn FlushFunc) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cfg.OnFlush = fn
+}
+
+// Reset discards all buffered records without calling OnFlush.
+// Useful for testing or after a confirmed upstream acknowledgement.
+func (a *InferenceAuditor) Reset() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.batch = make([]*Record, 0, a.cfg.BatchSize)
+}
+
+// RecordWithMeta is like Record but accepts additional metadata key-value pairs.
+func (a *InferenceAuditor) RecordWithMeta(model string, input, output interface{}, confidence float64, latencyMS int64, meta map[string]interface{}) (string, error) {
+	id, err := a.Record(model, input, output, confidence, latencyMS)
+	if err != nil {
+		return "", err
+	}
+	if len(meta) == 0 {
+		return id, nil
+	}
+	// Attach metadata to the last record added.
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.batch) > 0 {
+		last := a.batch[len(a.batch)-1]
+		if last.RecordID == id {
+			last.Metadata = meta
+		}
+	}
+	return id, nil
+}

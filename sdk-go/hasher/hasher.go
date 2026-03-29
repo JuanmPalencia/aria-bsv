@@ -166,3 +166,54 @@ func HashBytes(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
 }
+
+// HashString computes SHA-256 of a UTF-8 string. Returns a lowercase hex string.
+func HashString(s string) string {
+	return HashBytes([]byte(s))
+}
+
+// MustHashObject is like HashObject but panics on error.
+// Use only when the input is guaranteed to be JSON-serializable.
+func MustHashObject(v interface{}) string {
+	h, err := HashObject(v)
+	if err != nil {
+		panic(fmt.Sprintf("hasher.MustHashObject: %v", err))
+	}
+	return h
+}
+
+// PrefixedHash returns the hash in "sha256:<hex>" format, matching the
+// Python SDK's hash_object() output used in DatasetAnchor records.
+func PrefixedHash(hash string) string {
+	return "sha256:" + hash
+}
+
+// HashObjectPrefixed computes the canonical hash and returns it in
+// "sha256:<hex>" format.
+func HashObjectPrefixed(v interface{}) (string, error) {
+	h, err := HashObject(v)
+	if err != nil {
+		return "", err
+	}
+	return PrefixedHash(h), nil
+}
+
+// Equal reports whether two hex-encoded SHA-256 hashes are identical.
+// Comparison is case-insensitive and constant-time against timing attacks.
+func Equal(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	// Decode both; fall back to string compare on decode error
+	aBytes, errA := hex.DecodeString(a)
+	bBytes, errB := hex.DecodeString(b)
+	if errA != nil || errB != nil {
+		return a == b
+	}
+	// constant-time byte comparison
+	var diff byte
+	for i := range aBytes {
+		diff |= aBytes[i] ^ bBytes[i]
+	}
+	return diff == 0
+}
