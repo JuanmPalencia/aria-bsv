@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import re
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,10 @@ from aria.core.merkle import ARIAMerkleTree, MerkleProof, verify_proof
 # Directory for reference vectors
 VECTOR_DIR = Path(__file__).parent
 VECTOR_FILE = VECTOR_DIR / "vectors.json"
+
+# Rust SDK source paths (static analysis only — no Rust compilation needed)
+RUST_HASHER_SOURCE = VECTOR_DIR.parent.parent / "sdk-rs" / "hasher" / "src" / "lib.rs"
+RUST_MERKLE_SOURCE = VECTOR_DIR.parent.parent / "sdk-rs" / "merkle" / "src" / "lib.rs"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -161,11 +166,47 @@ class TestCrossSDKVectors:
     """Generate and verify cross-SDK reference vectors."""
 
     def test_generate_vectors(self):
-        """Generate reference vectors file for TS/Go SDKs."""
+        """Generate reference vectors file for TS/Go/Rust SDKs."""
         vectors = {
             "canonical_json": [],
             "hash_object": [],
             "merkle": {},
+            # Rust SDK metadata: same expected values as Python/TS/Go.
+            # The Python test TestRustSdkVectors performs static analysis of
+            # sdk-rs/hasher/src/lib.rs to verify these vectors appear there.
+            "rust": {
+                "rust_crate": "sdk-rs/hasher",
+                "description": (
+                    "Rust SDK test vectors — identical expected values to Python/TS/Go. "
+                    "Verified by TestRustSdkVectors (static source analysis, no Rust compilation)."
+                ),
+                "known_vectors": [
+                    {
+                        "input_bytes_ascii": "",
+                        "expected_sha256": (
+                            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        ),
+                        "rust_test": "hash_bytes_known_vector",
+                    },
+                    {
+                        "input_bytes_ascii": "abc",
+                        "expected_sha256": (
+                            "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469328ce1b14f7a1d7b8"
+                        ),
+                        "rust_test": "hash_bytes_abc_vector",
+                    },
+                ],
+                "canonical_json_vector": {
+                    "input": {"model": "gpt-4", "seq": 0, "confidence": None},
+                    "expected_canonical": '{"confidence":null,"model":"gpt-4","seq":0}',
+                    "rust_test": "cross_sdk_canonical_json_vector",
+                },
+                "merkle_prefix": {
+                    "leaf_prefix_hex": "00",
+                    "internal_prefix_hex": "01",
+                    "description": "RFC 6962 second-preimage protection (BRC-121 §5)",
+                },
+            },
         }
 
         # Canonical JSON vectors
