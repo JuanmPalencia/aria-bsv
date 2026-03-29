@@ -29,6 +29,9 @@ Phase 18–22: AI SDK integrations (OpenAI, Anthropic, HuggingFace, LlamaIndex),
              regulatory tools (GDPR, model cards, regulatory export),
              infrastructure (shadow mode, replay, SIEM, multitenancy),
              multi-chain (Ethereum, Nostr), federation, MLflow/W&B.
+Phase 23: Completeness features — auto_config, scheduled_epochs, query,
+          selftest, export_bundle, notifications, compare, backup,
+          dashboard, import_from, certify, reports.
 """
 
 from aria.core import (
@@ -60,6 +63,18 @@ from aria.wallet import BRC100Wallet, DirectWallet, WalletInterface
 from aria.auditor import AuditConfig, InferenceAuditor, Receipt
 from aria.storage import EpochRow, SQLiteStorage, StorageInterface
 from aria.verify import TxFetcher, VerificationResult, Verifier, WhatsOnChainFetcher
+from aria.auto_config import auto_config as auto_config_fn, auto_wallet, get_or_create_wif
+from aria.scheduled_epochs import EpochScheduler, ScheduleConfig, parse_strategy
+from aria.query import RecordQuery, QueryStats
+from aria.selftest import selftest, SelftestReport
+from aria.export_bundle import create_bundle, create_bundle_bytes
+from aria.notifications import NotificationManager, Notification
+from aria.compare import ModelComparator, ComparisonResult
+from aria.backup import backup, restore, list_backups
+from aria.dashboard import create_dashboard_app, serve as serve_dashboard
+from aria.import_from import from_jsonl, from_openai_log, from_mlflow_export, from_wandb_export, save_imported
+from aria.certify import Certifier, Certificate
+from aria.reports import MultiReport, MultiEpochReport
 from aria.zk import (
     AggregateProof,
     AllModelsRegistered,
@@ -133,4 +148,46 @@ __all__ = [
     "VerificationResult",
     "Verifier",
     "WhatsOnChainFetcher",
+    # auto_config
+    "auto_config_fn",
+    "auto_wallet",
+    "get_or_create_wif",
+    # scheduled_epochs
+    "EpochScheduler",
+    "ScheduleConfig",
+    "parse_strategy",
+    # query
+    "RecordQuery",
+    "QueryStats",
+    # selftest
+    "selftest",
+    "SelftestReport",
+    # export_bundle
+    "create_bundle",
+    "create_bundle_bytes",
+    # notifications
+    "NotificationManager",
+    "Notification",
+    # compare
+    "ModelComparator",
+    "ComparisonResult",
+    # backup
+    "backup",
+    "restore",
+    "list_backups",
+    # dashboard
+    "create_dashboard_app",
+    "serve_dashboard",
+    # import_from
+    "from_jsonl",
+    "from_openai_log",
+    "from_mlflow_export",
+    "from_wandb_export",
+    "save_imported",
+    # certify
+    "Certifier",
+    "Certificate",
+    # reports
+    "MultiReport",
+    "MultiEpochReport",
 ]

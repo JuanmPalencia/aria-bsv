@@ -695,6 +695,207 @@ def compliance_check(
 
 
 # ---------------------------------------------------------------------------
+# aria selftest
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--bsv", is_flag=True, help="Also check BSV connectivity (requires network)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def selftest(bsv: bool, as_json: bool) -> None:
+    """Run ARIA self-test to verify installation health."""
+    from aria.selftest import selftest as run_selftest
+
+    report = run_selftest(bsv=bsv)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        return
+
+    click.echo(report.summary())
+    if not report.ok:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# aria query
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--model", default=None, help="Filter by model_id")
+@click.option("--since", default=None, help="Time window, e.g. '24h', '7d'")
+@click.option("--confidence-lt", default=None, type=float, help="Confidence below threshold")
+@click.option("--limit", default=20, show_default=True, type=int)
+@click.option("--json", "as_json", is_flag=True)
+def query(db: str, model: Optional[str], since: Optional[str], confidence_lt: Optional[float], limit: int, as_json: bool) -> None:
+    """Query audit records with filters."""
+    from aria.query import RecordQuery
+
+    storage = _get_storage(db)
+    q = RecordQuery(storage)
+
+    if model:
+        q = q.model(model)
+    if since:
+        q = q.since(since)
+    if confidence_lt is not None:
+        q = q.where(confidence__lt=confidence_lt)
+    q = q.limit(limit)
+
+    records = q.execute()
+
+    if as_json:
+        click.echo(json.dumps([{
+            "record_id": r.record_id,
+            "model_id": r.model_id,
+            "confidence": r.confidence,
+            "latency_ms": r.latency_ms,
+            "sequence": r.sequence,
+        } for r in records], indent=2))
+        return
+
+    if not records:
+        _info("No records found matching the query.")
+        return
+
+    click.echo(f"{'RECORD ID':<40} {'MODEL':<15} {'CONF':>6} {'LAT(ms)':>8}")
+    click.echo("─" * 75)
+    for r in records:
+        conf = f"{r.confidence:.3f}" if r.confidence is not None else "N/A"
+        click.echo(f"{r.record_id:<40} {r.model_id:<15} {conf:>6} {r.latency_ms or 0:>8}")
+
+
+# ---------------------------------------------------------------------------
+# aria backup / restore
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--output-dir", default=".", show_default=True, help="Directory for backup file")
+@click.option("--no-compress", is_flag=True, help="Don't gzip the backup")
+def backup(db: str, output_dir: str, no_compress: bool) -> None:
+    """Create a backup of the ARIA database."""
+    from aria.backup import backup as run_backup
+
+    storage = _get_storage(db)
+    path = run_backup(storage, output_dir, compress=not no_compress)
+    _ok(f"Backup created: {path}")
+
+
+@cli.command("restore")
+@click.argument("backup_path", type=click.Path(exists=True))
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--overwrite", is_flag=True, help="Overwrite existing records")
+def restore_cmd(backup_path: str, db: str, overwrite: bool) -> None:
+    """Restore records from an ARIA backup file."""
+    from aria.backup import restore as run_restore
+
+    storage = _get_storage(db)
+    counts = run_restore(backup_path, storage, skip_existing=not overwrite)
+    _ok(f"Restored: {counts}")
+
+
+# ---------------------------------------------------------------------------
+# aria dashboard
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8710, show_default=True, type=int)
+def dashboard(db: str, host: str, port: int) -> None:
+    """Launch a web dashboard for ARIA data visualization."""
+    from aria.dashboard import serve
+
+    storage = _get_storage(db)
+    _info(f"Starting ARIA dashboard at http://{host}:{port}")
+    serve(storage, host=host, port=port)
+
+
+# ---------------------------------------------------------------------------
+# aria certify
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("epoch_id")
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--json", "as_json", is_flag=True)
+@click.option("--badge", is_flag=True, help="Output SVG badge instead of certificate")
+def certify(epoch_id: str, db: str, as_json: bool, badge: bool) -> None:
+    """Generate an integrity certificate for an epoch."""
+    from aria.certify import Certifier
+
+    storage = _get_storage(db)
+    certifier = Certifier(storage)
+
+    try:
+        cert = certifier.certify_epoch(epoch_id)
+    except Exception as exc:
+        _err(f"Certification failed: {exc}")
+        sys.exit(1)
+
+    if badge:
+        click.echo(certifier.badge(cert))
+        return
+
+    if as_json:
+        click.echo(cert.to_json())
+        return
+
+    click.echo(cert.summary())
+
+
+# ---------------------------------------------------------------------------
+# aria import
+# ---------------------------------------------------------------------------
+
+@cli.command("import")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--format", "fmt", default="jsonl", type=click.Choice(["jsonl", "openai", "mlflow", "wandb"]), show_default=True)
+@click.option("--epoch-id", default=None, help="Epoch ID for imported records (jsonl only)")
+@click.option("--model-id", default=None, help="Model ID (jsonl only)")
+@click.option("--db", default="aria.db", show_default=True)
+def import_cmd(path: str, fmt: str, epoch_id: Optional[str], model_id: Optional[str], db: str) -> None:
+    """Import inference records from external formats into ARIA."""
+    from aria.import_from import from_jsonl, from_openai_log, from_mlflow_export, from_wandb_export, save_imported
+
+    storage = _get_storage(db)
+
+    if fmt == "jsonl":
+        records = from_jsonl(path, epoch_id=epoch_id or "imported", model_id=model_id or "unknown")
+    elif fmt == "openai":
+        records = from_openai_log(path)
+    elif fmt == "mlflow":
+        records = from_mlflow_export(path)
+    elif fmt == "wandb":
+        records = from_wandb_export(path)
+    else:
+        _err(f"Unknown format: {fmt}")
+        sys.exit(1)
+
+    count = save_imported(records, storage)
+    _ok(f"Imported {count} records from {path} ({fmt} format)")
+
+
+# ---------------------------------------------------------------------------
+# aria bundle
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--db", default="aria.db", show_default=True)
+@click.option("--epoch", "epoch_ids", multiple=True, help="Epoch IDs to include (repeatable, all if omitted)")
+@click.option("--output", "output_path", required=True, help="Output ZIP file path")
+def bundle(db: str, epoch_ids: tuple, output_path: str) -> None:
+    """Create a portable audit bundle (ZIP) for external verification."""
+    from aria.export_bundle import create_bundle
+
+    storage = _get_storage(db)
+    ids = list(epoch_ids) if epoch_ids else None
+    create_bundle(storage, epoch_ids=ids, output=output_path)
+    _ok(f"Bundle created: {output_path}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
