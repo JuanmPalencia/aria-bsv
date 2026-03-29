@@ -110,3 +110,25 @@ jobs:
           print('Smoke test passed:', s.epoch_id)
           aria.stop()
           "
+
+  # --------------------------------------------------------------------------
+  # Performance benchmarks — non-blocking, informational
+  # --------------------------------------------------------------------------
+  perf:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Timing-sensitive; CI runners vary — never block merge
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run benchmark suite
+        run: |
+          pytest tests/perf/ -v --tb=short --timeout=120
