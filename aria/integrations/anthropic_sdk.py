@@ -74,6 +74,122 @@ def _response_to_output(response: Any) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Streaming helpers
+# ---------------------------------------------------------------------------
+
+class _ARIAAnthropicStreamIterator:
+    """Wraps a sync Anthropic stream and records to ARIA when exhausted.
+
+    Anthropic streaming chunks have a ``delta.text`` attribute on
+    ``content_block_delta`` events.  Other event types are yielded transparently
+    without text extraction.
+    """
+
+    def __init__(
+        self,
+        stream: Any,
+        model_id: str,
+        input_data: Any,
+        recorder: Any,
+        t0: float,
+        metadata: dict,
+    ) -> None:
+        self._stream = stream
+        self._model_id = model_id
+        self._input_data = input_data
+        self._recorder = recorder
+        self._t0 = t0
+        self._metadata = metadata
+        self._chunks: list[str] = []
+
+    def __iter__(self) -> Any:
+        for event in self._stream:
+            try:
+                # Anthropic SDK v0.20+: RawContentBlockDeltaEvent
+                if hasattr(event, "delta") and hasattr(event.delta, "text"):
+                    text = event.delta.text or ""
+                    if text:
+                        self._chunks.append(text)
+            except Exception:
+                pass
+            yield event
+        self._record()
+
+    def _record(self) -> None:
+        text = "".join(self._chunks)
+        latency_ms = (time.time() - self._t0) * 1000
+        self._recorder.record(
+            model_id=self._model_id,
+            input_data=self._input_data,
+            output_data={"text": text, "chunk_count": len(self._chunks), "streamed": True},
+            latency_ms=latency_ms,
+            metadata={**self._metadata, "streamed": True},
+        )
+
+    def __enter__(self) -> "_ARIAAnthropicStreamIterator":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        pass
+
+
+class _ARIAAnthropicAsyncStreamIterator:
+    """Async variant of _ARIAAnthropicStreamIterator."""
+
+    def __init__(
+        self,
+        stream: Any,
+        model_id: str,
+        input_data: Any,
+        recorder: Any,
+        t0: float,
+        metadata: dict,
+    ) -> None:
+        self._stream = stream
+        self._model_id = model_id
+        self._input_data = input_data
+        self._recorder = recorder
+        self._t0 = t0
+        self._metadata = metadata
+        self._chunks: list[str] = []
+
+    def __aiter__(self) -> "_ARIAAnthropicAsyncStreamIterator":
+        return self
+
+    async def __anext__(self) -> Any:
+        try:
+            event = await self._stream.__anext__()
+        except StopAsyncIteration:
+            self._record()
+            raise
+        try:
+            if hasattr(event, "delta") and hasattr(event.delta, "text"):
+                text = event.delta.text or ""
+                if text:
+                    self._chunks.append(text)
+        except Exception:
+            pass
+        return event
+
+    def _record(self) -> None:
+        text = "".join(self._chunks)
+        latency_ms = (time.time() - self._t0) * 1000
+        self._recorder.record(
+            model_id=self._model_id,
+            input_data=self._input_data,
+            output_data={"text": text, "chunk_count": len(self._chunks), "streamed": True},
+            latency_ms=latency_ms,
+            metadata={**self._metadata, "streamed": True},
+        )
+
+    async def __aenter__(self) -> "_ARIAAnthropicAsyncStreamIterator":
+        return self
+
+    async def __aexit__(self, *_: Any) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Sync wrapper
 # ---------------------------------------------------------------------------
 
@@ -86,20 +202,28 @@ class _ARIAMessages:
         model_id = self._recorder.model_id or kwargs.get("model", "claude")
         messages = kwargs.get("messages", [])
         system = kwargs.get("system")
+        meta = {
+            "provider": "anthropic",
+            "model": kwargs.get("model", ""),
+            "max_tokens": kwargs.get("max_tokens"),
+        }
         t0 = time.time()
         response = self._orig.create(**kwargs)
-        latency_ms = (time.time() - t0) * 1000
 
+        # Streaming: wrap iterator — record fires when stream is exhausted
+        if kwargs.get("stream"):
+            return _ARIAAnthropicStreamIterator(
+                iter(response), model_id, _messages_to_input(messages, system),
+                self._recorder, t0, meta,
+            )
+
+        latency_ms = (time.time() - t0) * 1000
         self._recorder.record(
             model_id=model_id,
             input_data=_messages_to_input(messages, system),
             output_data=_response_to_output(response),
             latency_ms=latency_ms,
-            metadata={
-                "provider": "anthropic",
-                "model": kwargs.get("model", ""),
-                "max_tokens": kwargs.get("max_tokens"),
-            },
+            metadata=meta,
         )
         return response
 
@@ -176,16 +300,24 @@ class _ARIAAsyncMessages:
         model_id = self._recorder.model_id or kwargs.get("model", "claude")
         messages = kwargs.get("messages", [])
         system = kwargs.get("system")
+        meta = {"provider": "anthropic", "model": kwargs.get("model", "")}
         t0 = time.time()
         response = await self._orig.create(**kwargs)
-        latency_ms = (time.time() - t0) * 1000
 
+        # Streaming: wrap async iterator
+        if kwargs.get("stream"):
+            return _ARIAAnthropicAsyncStreamIterator(
+                response.__aiter__(), model_id, _messages_to_input(messages, system),
+                self._recorder, t0, meta,
+            )
+
+        latency_ms = (time.time() - t0) * 1000
         self._recorder.record(
             model_id=model_id,
             input_data=_messages_to_input(messages, system),
             output_data=_response_to_output(response),
             latency_ms=latency_ms,
-            metadata={"provider": "anthropic", "model": kwargs.get("model", "")},
+            metadata=meta,
         )
         return response
 

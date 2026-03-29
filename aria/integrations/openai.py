@@ -96,6 +96,118 @@ def _response_to_output(response: Any) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Streaming helpers
+# ---------------------------------------------------------------------------
+
+class _ARIAStreamIterator:
+    """Wraps a sync OpenAI stream and records to ARIA when exhausted.
+
+    Yields each chunk transparently so caller code needs no changes.
+    The AuditRecord is created automatically after the last chunk.
+    """
+
+    def __init__(
+        self,
+        stream: Any,
+        model_id: str,
+        input_data: Any,
+        recorder: "_ARIARecorder",
+        t0: float,
+        metadata: dict,
+    ) -> None:
+        self._stream = stream
+        self._model_id = model_id
+        self._input_data = input_data
+        self._recorder = recorder
+        self._t0 = t0
+        self._metadata = metadata
+        self._chunks: list[str] = []
+
+    def __iter__(self) -> Any:
+        for chunk in self._stream:
+            try:
+                content = chunk.choices[0].delta.content or ""
+            except (AttributeError, IndexError):
+                content = ""
+            if content:
+                self._chunks.append(content)
+            yield chunk
+        self._record()
+
+    def _record(self) -> None:
+        text = "".join(self._chunks)
+        latency_ms = (time.time() - self._t0) * 1000
+        self._recorder.record(
+            model_id=self._model_id,
+            input_data=self._input_data,
+            output_data={"text": text, "chunk_count": len(self._chunks), "streamed": True},
+            latency_ms=latency_ms,
+            metadata={**self._metadata, "streamed": True},
+        )
+
+    def __enter__(self) -> "_ARIAStreamIterator":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        pass
+
+
+class _ARIAAsyncStreamIterator:
+    """Wraps an async OpenAI stream and records to ARIA when exhausted."""
+
+    def __init__(
+        self,
+        stream: Any,
+        model_id: str,
+        input_data: Any,
+        recorder: "_ARIARecorder",
+        t0: float,
+        metadata: dict,
+    ) -> None:
+        self._stream = stream
+        self._model_id = model_id
+        self._input_data = input_data
+        self._recorder = recorder
+        self._t0 = t0
+        self._metadata = metadata
+        self._chunks: list[str] = []
+
+    def __aiter__(self) -> "_ARIAAsyncStreamIterator":
+        return self
+
+    async def __anext__(self) -> Any:
+        try:
+            chunk = await self._stream.__anext__()
+        except StopAsyncIteration:
+            self._record()
+            raise
+        try:
+            content = chunk.choices[0].delta.content or ""
+        except (AttributeError, IndexError):
+            content = ""
+        if content:
+            self._chunks.append(content)
+        return chunk
+
+    def _record(self) -> None:
+        text = "".join(self._chunks)
+        latency_ms = (time.time() - self._t0) * 1000
+        self._recorder.record(
+            model_id=self._model_id,
+            input_data=self._input_data,
+            output_data={"text": text, "chunk_count": len(self._chunks), "streamed": True},
+            latency_ms=latency_ms,
+            metadata={**self._metadata, "streamed": True},
+        )
+
+    async def __aenter__(self) -> "_ARIAAsyncStreamIterator":
+        return self
+
+    async def __aexit__(self, *_: Any) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Sync wrapper
 # ---------------------------------------------------------------------------
 
@@ -109,21 +221,28 @@ class _ARIAChatCompletions:
     def create(self, **kwargs) -> Any:
         model_id = self._recorder.model_id or kwargs.get("model", "openai")
         messages = kwargs.get("messages", [])
+        meta = {
+            "provider": "openai",
+            "model": kwargs.get("model", ""),
+            "temperature": kwargs.get("temperature"),
+        }
         t0 = time.time()
         response = self._orig.create(**kwargs)
-        latency_ms = (time.time() - t0) * 1000
 
+        # Streaming: wrap iterator — record fires when stream is exhausted
+        if kwargs.get("stream"):
+            return _ARIAStreamIterator(
+                response, model_id, _messages_to_input(messages), self._recorder, t0, meta
+            )
+
+        latency_ms = (time.time() - t0) * 1000
         self._recorder.record(
             model_id=model_id,
             input_data=_messages_to_input(messages),
             output_data=_response_to_output(response),
             confidence=_extract_confidence(response),
             latency_ms=latency_ms,
-            metadata={
-                "provider": "openai",
-                "model": kwargs.get("model", ""),
-                "temperature": kwargs.get("temperature"),
-            },
+            metadata=meta,
         )
         return response
 
@@ -245,17 +364,25 @@ class _ARIAAsyncChatCompletions:
     async def create(self, **kwargs) -> Any:
         model_id = self._recorder.model_id or kwargs.get("model", "openai")
         messages = kwargs.get("messages", [])
+        meta = {"provider": "openai", "model": kwargs.get("model", "")}
         t0 = time.time()
         response = await self._orig.create(**kwargs)
-        latency_ms = (time.time() - t0) * 1000
 
+        # Streaming: wrap async iterator — record fires when stream is exhausted
+        if kwargs.get("stream"):
+            return _ARIAAsyncStreamIterator(
+                response.__aiter__(), model_id, _messages_to_input(messages),
+                self._recorder, t0, meta,
+            )
+
+        latency_ms = (time.time() - t0) * 1000
         self._recorder.record(
             model_id=model_id,
             input_data=_messages_to_input(messages),
             output_data=_response_to_output(response),
             confidence=_extract_confidence(response),
             latency_ms=latency_ms,
-            metadata={"provider": "openai", "model": kwargs.get("model", "")},
+            metadata=meta,
         )
         return response
 
