@@ -68,3 +68,37 @@ export type { MerkleBranch, SPVProof, SPVChainResult } from "./spv.js";
 // Overlay services (BRC-31)
 export { TopicManager, LookupService, OverlayClient } from "./overlay.js";
 export type { AdmittanceResult, LookupResult, OverlayClientOptions } from "./overlay.js";
+
+// sCrypt contracts — BRC-121 on-chain enforcement (types 01/02/03)
+export {
+  ARIAEpochContract,
+  EPOCH_BOND_SAT,
+  ARIATimelockContract,
+  MIN_TIMELOCK_BLOCKS,
+  ARIARegistryContract,
+  EUAIActRisk,
+  MAX_MODEL_HASHES,
+  MAX_SYSTEM_ID_BYTES,
+  toSha256,
+  toPubKeyHash,
+  toByteString,
+  toBlockHeight,
+  buildOpReturnScript,
+  ARIA_MAGIC,
+  BRC121_VERSION,
+} from "./contracts/index.js";
+export type {
+  EpochContractState,
+  EpochUnlockWitness,
+  TimelockContractState,
+  TimelockNormalWitness,
+  TimelockRecoveryWitness,
+  TimelockWitness,
+  RegistryEntry,
+  RegistryVerifyResult,
+  ContractVerifyResult,
+  Sha256,
+  PubKeyHash,
+  ByteString,
+  BlockHeight,
+} from "./contracts/index.js";
