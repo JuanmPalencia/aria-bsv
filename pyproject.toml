@@ -119,6 +119,9 @@ smolagents = [
 semantic_kernel = [
     "semantic-kernel>=1.0",     # Microsoft Semantic Kernel AI SDK
 ]
+mcp = [
+    "mcp>=1.0",                 # Model Context Protocol server (LLM self-auditing)
+]
 all = [
     "bsvlib>=0.4",
     "click>=8.1",
@@ -146,6 +149,7 @@ all = [
     "instructor>=1.0",
     "smolagents>=1.0",
     "semantic-kernel>=1.0",
+    "mcp>=1.0",
     "tomli>=2.0; python_version < '3.11'",
 ]
 dev = [
