@@ -1,0 +1,74 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["sdk-rs/**"]
+  pull_request:
+    branches: [main, develop]
+    paths: ["sdk-rs/**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Rust ${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            sdk-rs/target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('sdk-rs/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Check formatting
+        working-directory: sdk-rs
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: sdk-rs
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        working-directory: sdk-rs
+        run: cargo test --all --verbose
+
+      - name: Check documentation
+        working-directory: sdk-rs
+        run: cargo doc --all --no-deps
+
+  wasm:
+    name: WASM build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM target
+        working-directory: sdk-rs/wasm
+        run: wasm-pack build --target web --dev
+        continue-on-error: true  # wasm crate is additive — don't block main Rust CI

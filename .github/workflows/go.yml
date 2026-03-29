@@ -1,0 +1,60 @@
+name: Go CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["sdk-go/**"]
+  pull_request:
+    branches: [main, develop]
+    paths: ["sdk-go/**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.21", "1.22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: sdk-go/go.sum
+
+      - name: Vet
+        working-directory: sdk-go
+        run: go vet ./...
+
+      - name: Run tests
+        working-directory: sdk-go
+        run: go test ./... -v -race -count=1
+
+      - name: Run fuzz corpus (seed only)
+        working-directory: sdk-go
+        run: |
+          go test ./hasher/ -run=FuzzHashBytes -fuzz=FuzzHashBytes -fuzztime=5s || true
+          go test ./merkle/ -run=FuzzAddLeaf -fuzz=FuzzAddLeaf -fuzztime=5s || true
+        continue-on-error: true  # Fuzz testing is supplementary
+
+  staticcheck:
+    name: Staticcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: sdk-go/go.sum
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      - name: Run staticcheck
+        working-directory: sdk-go
+        run: staticcheck ./...
