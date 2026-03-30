@@ -258,6 +258,8 @@ class SIEMExporter:
     def _send_http(self, payload: str) -> None:
         try:
             import urllib.request
+            if not self._endpoint.startswith(("http://", "https://")):
+                raise ValueError(f"SIEM endpoint must use http(s): {self._endpoint!r}")
             req = urllib.request.Request(
                 self._endpoint,
                 data=payload.encode("utf-8"),
@@ -267,7 +269,7 @@ class SIEMExporter:
                 },
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 — scheme validated above
                 _log.debug("SIEM: HTTP %s", resp.status)
         except Exception as exc:
             _log.warning("SIEMExporter: HTTP delivery failed: %s", exc)

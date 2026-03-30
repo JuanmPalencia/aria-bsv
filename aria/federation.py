@@ -272,12 +272,16 @@ class FederationHub:
 
     async def _http_post(self, url: str, body: bytes, headers: dict) -> str:
         import urllib.request
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"Peer URL must use http(s): {url!r}")
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — scheme validated above
             return resp.read().decode("utf-8")
 
     async def _http_get(self, url: str, headers: dict) -> str | None:
         import urllib.request
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"Peer URL must use http(s): {url!r}")
         req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — scheme validated above
             return resp.read().decode("utf-8")
