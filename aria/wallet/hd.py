@@ -79,6 +79,7 @@ _TPUB_VERSION = bytes.fromhex("043587CF")
 # ---------------------------------------------------------------------------
 
 _SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+_SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 _SECP256K1_GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
 _SECP256K1_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
 
@@ -652,15 +653,23 @@ class WatchOnlyHDWallet:
                 if il_int >= _curve.n:
                     raise ARIAWalletError("invalid key material")
 
-                # G * il_int
                 il_point = curve_multiply(il_int, _curve.g)
-                # Parse parent public key to Point
                 parent_x, parent_y = _parse_pubkey_point(node_pubkey)
                 from bsv.curve import Point
                 parent_point = Point(parent_x, parent_y)
-                # child pubkey = G*il + parent
                 child_point = curve_add(il_point, parent_point)
                 node_pubkey = _point_to_bytes((child_point.x, child_point.y))
+                node_chain = IR
+            except ImportError:
+                il_int = int.from_bytes(IL, "big")
+                if il_int >= _SECP256K1_N:
+                    raise ARIAWalletError("invalid key material")
+                il_point = _ec_point_mul(il_int)
+                parent_point = _parse_pubkey_point(node_pubkey)
+                child_point = _ec_point_add(il_point, parent_point)
+                if child_point is None:
+                    raise ARIAWalletError("invalid key material")
+                node_pubkey = _point_to_bytes(child_point)
                 node_chain = IR
             except ARIAWalletError:
                 raise
