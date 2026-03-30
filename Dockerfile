@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy only dependency files first (better layer caching)
 COPY pyproject.toml ./
+COPY LICENSE ./
 COPY aria/__init__.py aria/
 
 # Install project + core extras into /install prefix
