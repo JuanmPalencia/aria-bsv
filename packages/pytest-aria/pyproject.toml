@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-aria"
+version = "0.1.0"
+description = "pytest plugin — anchor test run results to BSV via ARIA BRC-121"
+requires-python = ">=3.10"
+authors = [{ name = "Juan Manuel Palencia Osorio" }]
+keywords = ["pytest", "bsv", "aria", "brc-121", "audit", "testing"]
+dependencies = [
+    "pytest>=8.0",
+    "aria-bsv>=0.5.0",
+]
+
+[project.entry-points."pytest11"]
+aria = "pytest_aria.plugin"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
