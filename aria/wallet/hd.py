@@ -75,6 +75,54 @@ _TPUB_VERSION = bytes.fromhex("043587CF")
 
 
 # ---------------------------------------------------------------------------
+# Pure-Python secp256k1 fallback (used when bsvlib is not installed)
+# ---------------------------------------------------------------------------
+
+_SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+_SECP256K1_GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+_SECP256K1_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+
+
+def _ec_point_add(
+    P: tuple[int, int] | None, Q: tuple[int, int] | None
+) -> tuple[int, int] | None:
+    if P is None:
+        return Q
+    if Q is None:
+        return P
+    px, py = P
+    qx, qy = Q
+    if px == qx:
+        if py != qy:
+            return None
+        lam = (3 * px * px * pow(2 * py, _SECP256K1_P - 2, _SECP256K1_P)) % _SECP256K1_P
+    else:
+        lam = ((qy - py) * pow(qx - px, _SECP256K1_P - 2, _SECP256K1_P)) % _SECP256K1_P
+    rx = (lam * lam - px - qx) % _SECP256K1_P
+    ry = (lam * (px - rx) - py) % _SECP256K1_P
+    return (rx, ry)
+
+
+def _ec_point_mul(k: int) -> tuple[int, int]:
+    result: tuple[int, int] | None = None
+    addend: tuple[int, int] | None = (_SECP256K1_GX, _SECP256K1_GY)
+    while k:
+        if k & 1:
+            result = _ec_point_add(result, addend)
+        addend = _ec_point_add(addend, addend)
+        k >>= 1
+    assert result is not None
+    return result
+
+
+def _pubkey_from_privkey(private_key_bytes: bytes) -> bytes:
+    k = int.from_bytes(private_key_bytes, "big")
+    x, y = _ec_point_mul(k)
+    prefix = b"\x02" if y % 2 == 0 else b"\x03"
+    return prefix + x.to_bytes(32, "big")
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -149,6 +197,8 @@ class _BIP32Node:
         try:
             from bsv import PrivateKey
             return PrivateKey(self.private_key_bytes).public_key().serialize()
+        except ImportError:
+            return _pubkey_from_privkey(self.private_key_bytes)
         except Exception:
             raise ARIAWalletError("invalid key material")
 
@@ -233,6 +283,9 @@ class _BIP32Node:
             from bsv import PrivateKey, Network
             network = Network.MAINNET if self.network == "mainnet" else Network.TESTNET
             return PrivateKey(self.private_key_bytes, network=network).wif()
+        except ImportError:
+            version = b"\x80" if self.network == "mainnet" else b"\xef"
+            return _base58check_encode(version + self.private_key_bytes + b"\x01")
         except Exception:
             raise ARIAWalletError("invalid key material")
 
@@ -242,6 +295,9 @@ class _BIP32Node:
             from bsv import PrivateKey, Network
             network = Network.MAINNET if self.network == "mainnet" else Network.TESTNET
             return PrivateKey(self.private_key_bytes, network=network).address()
+        except ImportError:
+            version = b"\x00" if self.network == "mainnet" else b"\x6f"
+            return _base58check_encode(version + _hash160(self._compressed_pubkey()))
         except Exception:
             raise ARIAWalletError("invalid key material")
 

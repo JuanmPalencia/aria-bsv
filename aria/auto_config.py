@@ -29,6 +29,7 @@ Environment variables (all optional):
 
 from __future__ import annotations
 
+import getpass
 import hashlib
 import json
 import logging
@@ -65,7 +66,7 @@ def _machine_key() -> bytes:
     This is NOT a substitute for a real passphrase — it simply prevents
     the keystore from being trivially readable on another machine.
     """
-    seed = f"{platform.node()}:{os.getlogin()}:aria-bsv-keystore".encode()
+    seed = f"{platform.node()}:{getpass.getuser()}:aria-bsv-keystore".encode()
     return hashlib.pbkdf2_hmac("sha256", seed, b"aria-machine-salt", 100_000)
 
 

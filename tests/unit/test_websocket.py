@@ -346,7 +346,7 @@ class TestHeartbeat:
             except asyncio.CancelledError:
                 pass
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
         # At least one heartbeat should have been enqueued
         items = []
         while not q.empty():
@@ -363,4 +363,4 @@ class TestHeartbeat:
             # Should exit quickly since channel is empty
             await asyncio.wait_for(srv.heartbeat_loop("acme"), timeout=0.2)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
