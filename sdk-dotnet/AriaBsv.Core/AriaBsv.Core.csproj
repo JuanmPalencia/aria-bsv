@@ -2,11 +2,24 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Version>0.5.1</Version>
+    <PackageId>AriaBsv.Core</PackageId>
+    <Title>ARIA BSV — BRC-121 AI Accountability SDK</Title>
+    <Description>Cryptographic accountability for AI systems anchored on BSV blockchain via BRC-121. Provides canonical hashing, Merkle trees, and inference auditing.</Description>
+    <Authors>Juan Manuel Palencia Osorio</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/JuanmPalencia/aria-bsv</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/JuanmPalencia/aria-bsv.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>bsv;blockchain;ai;audit;brc-121;eu-ai-act;accountability</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>12</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\sdk-dotnet\README.md" Pack="true" PackagePath="\" Condition="Exists('..\..\sdk-dotnet\README.md')" />
   </ItemGroup>
 </Project>
