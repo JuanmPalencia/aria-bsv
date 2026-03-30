@@ -25,7 +25,7 @@
 //! assert_eq!(root.len(), 64);  // Merkle root hex
 //! ```
 
-use aria_bsv_hasher::{hash_object, hash_bytes};
+use aria_bsv_hasher::hash_object;
 use aria_bsv_merkle::Tree;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
