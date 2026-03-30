@@ -51,7 +51,7 @@ export { StreamingSession, ARIAStreamingAuditor, auditOpenAIStream, auditAnthrop
 
 // Dataset anchoring
 export { hashBytes, hashColumns, DatasetAnchorer, verifyDatasetAnchor } from "./dataset.js";
-export type { DatasetAnchor, DatasetAnchorOptions, DatasetAnchorerConfig } from "./dataset.js";
+export type { DatasetAnchor, DatasetAnchorerOptions, AnchorOptions } from "./dataset.js";
 
 // SPV verifier
 export {

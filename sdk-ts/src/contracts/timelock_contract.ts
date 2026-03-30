@@ -115,7 +115,7 @@ export const MIN_TIMELOCK_BLOCKS = 144
  * The preimage is typically the serialized EPOCH_CLOSE payload, ensuring that
  * the epoch can always be recovered even if the operator key is lost.
  */
-export class ARIATimelockContract extends ScryptBase {
+export class ARIATimelockContract extends ScryptBase<TimelockWitness> {
   readonly epochId: string
   readonly commitHash: Sha256
   readonly operatorPkh: PubKeyHash

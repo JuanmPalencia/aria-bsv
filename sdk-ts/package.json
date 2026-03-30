@@ -18,7 +18,14 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit"
   },
-  "keywords": ["bsv", "blockchain", "ai", "audit", "brc-121", "eu-ai-act"],
+  "keywords": [
+    "bsv",
+    "blockchain",
+    "ai",
+    "audit",
+    "brc-121",
+    "eu-ai-act"
+  ],
   "author": "Juan Manuel Palencia Osorio",
   "license": "MIT",
   "repository": {
@@ -26,9 +33,9 @@
     "url": "https://github.com/JuanmPalencia/aria-bsv.git"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsup": "^8.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0",
-    "tsup": "^8.0.0"
-  },
-  "dependencies": {}
+    "vitest": "^1.6.0"
+  }
 }

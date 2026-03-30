@@ -111,7 +111,7 @@ export const EPOCH_BOND_SAT = 1000n
  *   3. Operator broadcasts EPOCH_CLOSE tx, providing `unlock()` witness.
  *      The witness must include the same Merkle root committed in step 1.
  */
-export class ARIAEpochContract extends ScryptBase {
+export class ARIAEpochContract extends ScryptBase<EpochUnlockWitness> {
   readonly epochId: string
   readonly merkleRoot: Sha256
   readonly operatorPkh: PubKeyHash

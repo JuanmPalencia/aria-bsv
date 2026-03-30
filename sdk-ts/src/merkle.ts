@@ -70,7 +70,7 @@ async function _sha256Bytes(data: Uint8Array): Promise<string> {
     typeof globalThis !== "undefined" &&
     globalThis.crypto?.subtle
   ) {
-    const hashBuffer = await globalThis.crypto.subtle.digest("SHA-256", data);
+    const hashBuffer = await globalThis.crypto.subtle.digest("SHA-256", data as unknown as ArrayBuffer);
     return _bufferToHex(new Uint8Array(hashBuffer));
   }
   if (typeof require !== "undefined") {

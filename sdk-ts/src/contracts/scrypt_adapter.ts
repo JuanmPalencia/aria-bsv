@@ -93,10 +93,10 @@ export interface ContractVerifyResult {
 // Extend this in tests / dev; in production point to scrypt-ts SmartContract.
 // ---------------------------------------------------------------------------
 
-export abstract class ScryptBase {
+export abstract class ScryptBase<W = Record<string, unknown>> {
   /** Serialize the contract state to a hex string (simulated locking script). */
   abstract getLockingScriptHex(): string
 
   /** Simulate verifying that an unlock witness satisfies the contract. */
-  abstract verify(witness: Record<string, unknown>): ContractVerifyResult
+  abstract verify(witness: W): ContractVerifyResult
 }
