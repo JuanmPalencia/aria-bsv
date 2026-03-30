@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aria-bsv"
-version = "0.5.0"
+version = "0.5.1"
 description = "Auditable Real-time Inference Architecture — BRC-121 reference implementation"
 readme = "README.md"
 license = { file = "LICENSE" }
