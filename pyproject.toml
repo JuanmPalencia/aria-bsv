@@ -169,6 +169,7 @@ dev = [
     "alembic>=1.13",            # Migration testing
     "django>=4.2",              # Django integration tests
     "flask>=3.0",               # Flask integration tests
+    "werkzeug>=3.1.6",          # security floor: CVE-2025-66221, CVE-2026-21860, CVE-2026-27199
     "langchain-core>=0.2",      # LangChain integration tests
     "prometheus-client>=0.20",  # Prometheus metrics tests
     "litellm>=1.0",             # LiteLLM integration tests
