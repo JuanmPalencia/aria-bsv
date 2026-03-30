@@ -14,5 +14,5 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
-aria-bsv-hasher = { path = "../hasher" }
-aria-bsv-merkle = { path = "../merkle" }
+aria-bsv-hasher = { version = "0.5.1", path = "../hasher" }
+aria-bsv-merkle = { version = "0.5.1", path = "../merkle" }
